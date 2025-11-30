@@ -33,7 +33,7 @@ void Map::loadFromFile(const std::string& path) {
     std::vector<int> row;
     while (f >> val) {
         row.push_back(val);
-        if (row.size() == 10) { // mỗi dòng có 10 ô
+        if (row.size() == 15) { // mỗi dòng có 10 ô
             grid.push_back(row);
             row.clear();
         }
@@ -41,11 +41,11 @@ void Map::loadFromFile(const std::string& path) {
     f.close();
 }
 
-void Map::render() {
+void Map::render(int offsetX, int offsetY) {
     for (size_t r = 0; r < grid.size(); ++r) {
         for (size_t c = 0; c < grid[r].size(); ++c) {
-            SDL_FRect rect = { (float)(c * TILE_SIZE), (float)(r * TILE_SIZE),
-                               (float)TILE_SIZE, (float)TILE_SIZE };
+            SDL_FRect rect = { (float)(c * TILE_SIZE + offsetX), (float)(r * TILE_SIZE + offsetY),
+                                (float)TILE_SIZE, (float)TILE_SIZE };
 
             if ((r + c) % 2 == 0)
                 SDL_RenderTexture(renderer, tex_floor_light, NULL, &rect);
@@ -62,4 +62,12 @@ bool Map::isWall(int x, int y) const {
     if (y < 0 || y >= (int)grid.size()) return true;
     if (x < 0 || x >= (int)grid[y].size()) return true;
     return grid[y][x] == 1;
+}
+
+int Map::getCols() const {
+    return grid.empty() ? 0 : (int)grid[0].size();
+}
+
+int Map::getRows() const {
+    return (int)grid.size();
 }

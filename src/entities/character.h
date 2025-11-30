@@ -16,7 +16,7 @@ protected:
 public:
     Character(SDL_Renderer* renderer, const std::string& path, int startX, int startY, int tileSize);
     virtual ~Character();
-    virtual void render();
+    virtual void render(int offsetX = 0, int offsetY = 0);
     bool canMoveTo(Map* map, int nx, int ny);
     void moveTo(int nx, int ny);
     bool isAtRest() const;

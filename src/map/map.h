@@ -20,7 +20,9 @@ public:
     ~Map();
 
     void loadFromFile(const std::string& path);
-    void render();
+    void render(int offsetX, int offsetY);
     bool isWall(int x, int y) const;
+    int getCols() const;
+    int getRows() const;
     int getTileSize() const { return TILE_SIZE; }
 };

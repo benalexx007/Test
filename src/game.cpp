@@ -3,11 +3,18 @@
 void Game::init() {
     SDL_Init(SDL_INIT_VIDEO);
 
-    window = SDL_CreateWindow("Mummy Maze (SDL3)", 640, 640, 0);
+    window = SDL_CreateWindow("Mummy Maze (SDL3)", 1920, 1080, 0);
     renderer = SDL_CreateRenderer(window, NULL);
 
     map = new Map(renderer);
-    map->loadFromFile("assets/maps/tutorial.txt");
+    map->loadFromFile("assets/maps/level1.txt");
+
+    int winW = 0, winH = 0;
+    SDL_GetWindowSize(window, &winW, &winH);
+    int mapPxW = map->getTileSize() * map->getCols();
+    int mapPxH = map->getTileSize() * map->getRows();
+    offsetX = (winW - mapPxW)*95/100;
+    offsetY = (winH - mapPxH) / 2;
 
     int tileSize = map->getTileSize();
     explorer = new Explorer(renderer, 1, 1, tileSize);
@@ -56,9 +63,9 @@ void Game::render() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    map->render();
-    explorer->render();
-    mummy->render();
+    map->render(offsetX, offsetY);
+    explorer->render(offsetX, offsetY);
+    mummy->render(offsetX, offsetY);
 
     SDL_RenderPresent(renderer);
 }

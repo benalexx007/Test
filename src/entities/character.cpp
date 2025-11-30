@@ -12,8 +12,8 @@ Character::Character(SDL_Renderer* renderer, const std::string& path, int startX
 
 Character::~Character() { SDL_DestroyTexture(texture); }
 
-void Character::render() {
-    SDL_FRect rect = { fx * tileSize, fy * tileSize, (float)tileSize, (float)tileSize };
+void Character::render(int offsetX, int offsetY) {
+    SDL_FRect rect = { fx * tileSize + offsetX, fy * tileSize + offsetY, (float)tileSize, (float)tileSize };
     SDL_RenderTexture(renderer, texture, NULL, &rect);
 }
 

@@ -13,6 +13,8 @@ private:
     bool isRunning = false;
     int turn = 0; // 0 = Explorer, 1 = Mummy
     int mummyStepsLeft = 0;
+    int offsetX = 0;
+    int offsetY = 0;
 public:
     Map* map = nullptr;
     Explorer* explorer = nullptr;
