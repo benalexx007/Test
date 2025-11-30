@@ -14,7 +14,8 @@ protected:
     float fx, fy; // vị trí thực tế cho animation mượt
 
 public:
-    Character(SDL_Renderer* renderer, const std::string& path, int startX, int startY, int tileSize);
+    // baseName: "assets/images/explorer" -> will load baseName + stage + ".png"
+    Character(SDL_Renderer* renderer, const std::string& baseName, const std::string& stage, int startX, int startY, int tileSize);
     virtual ~Character();
     virtual void render(int offsetX = 0, int offsetY = 0);
     bool canMoveTo(Map* map, int nx, int ny);

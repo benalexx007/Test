@@ -9,10 +9,10 @@ SDL_Texture* Map::loadTexture(const std::string& path) {
     return tex;
 }
 
-Map::Map(SDL_Renderer* ren) : renderer(ren) {
-    tex_floor_light = loadTexture("assets/images/maysang.png");
-    tex_floor_dark  = loadTexture("assets/images/maytoi.png");
-    tex_wall        = loadTexture("assets/images/set.png");
+Map::Map(SDL_Renderer* ren, const std::string& stage) : renderer(ren) {
+    tex_floor_light = loadTexture("assets/images/grid/lightGrid" + stage + ".png");
+    tex_floor_dark  = loadTexture("assets/images/grid/darkGrid" + stage + ".png");
+    tex_wall        = loadTexture("assets/images/wall/wall" + stage + ".png");
 }
 
 Map::~Map() {
@@ -33,7 +33,7 @@ void Map::loadFromFile(const std::string& path) {
     std::vector<int> row;
     while (f >> val) {
         row.push_back(val);
-        if (row.size() == 15) { // mỗi dòng có 10 ô
+        if (row.size() == 15) { 
             grid.push_back(row);
             row.clear();
         }

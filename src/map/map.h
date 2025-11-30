@@ -11,12 +11,12 @@ private:
     SDL_Texture* tex_floor_dark;
     SDL_Texture* tex_wall;
     std::vector<std::vector<int>> grid;
-    const int TILE_SIZE = 64;
+    int TILE_SIZE = 64;
 
     SDL_Texture* loadTexture(const std::string& path);
 
 public:
-    Map(SDL_Renderer* ren);
+    Map(SDL_Renderer* ren, const std::string& stage);
     ~Map();
 
     void loadFromFile(const std::string& path);

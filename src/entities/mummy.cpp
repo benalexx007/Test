@@ -1,8 +1,8 @@
 #include "mummy.h"
 #include <cmath>
 
-Mummy::Mummy(SDL_Renderer* renderer, int startX, int startY, int tileSize)
-    : Character(renderer, "assets/images/mummy.png", startX, startY, tileSize) {}
+Mummy::Mummy(SDL_Renderer* renderer, int startX, int startY, int tileSize, const std::string& stage)
+    : Character(renderer, "assets/images/mummy/mummy", stage, startX, startY, tileSize) {}
 
 void Mummy::moveOneStep(Map* map, int targetX, int targetY) {
     int dx = targetX - x;

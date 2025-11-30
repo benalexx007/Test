@@ -1,34 +1,52 @@
 #include "game.h"
+#include <cmath>
 
-void Game::init() {
+void Game::init(const std::string& stage) {
     SDL_Init(SDL_INIT_VIDEO);
 
-    window = SDL_CreateWindow("Mummy Maze (SDL3)", 1920, 1080, 0);
+    window = SDL_CreateWindow("Mummy Maze (SDL3)", winW, winH, SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, NULL);
+    SDL_MaximizeWindow(window);
 
-    map = new Map(renderer);
-    map->loadFromFile("assets/maps/level1.txt");
+    map = new Map(renderer, stage);
+    map->loadFromFile("assets/maps/level"+stage+".txt");
 
-    int winW = 0, winH = 0;
-    SDL_GetWindowSize(window, &winW, &winH);
     int mapPxW = map->getTileSize() * map->getCols();
     int mapPxH = map->getTileSize() * map->getRows();
     offsetX = (winW - mapPxW)*95/100;
     offsetY = (winH - mapPxH) / 2;
 
     int tileSize = map->getTileSize();
-    explorer = new Explorer(renderer, 1, 1, tileSize);
-    mummy = new Mummy(renderer, 5, 5, tileSize);
+    explorer = new Explorer(renderer, 1, 1, tileSize, stage);
+    mummy = new Mummy(renderer, 5, 5, tileSize, stage);
 
     isRunning = true;
 }
 
 void Game::handleEvents() {
     SDL_Event e;
+    int curW = winW;
+    int curH = winH;
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_EVENT_QUIT)
             isRunning = false;
-
+        
+        if (e.type == SDL_EVENT_WINDOW_RESIZED) {
+            int w = e.window.data1;
+            int h = e.window.data2;
+            if (w != curW){
+                h = static_cast<int>(w / windowRatio);
+            }
+            else if (h != curH){
+                w = static_cast<int>(h * windowRatio);
+            }
+            SDL_SetWindowSize(window, w, h);
+            float scale = static_cast<float>(w) / static_cast<float>(winW);
+            SDL_SetRenderScale(renderer, scale, scale);
+            curW = w;
+            curH = h;
+        }
+        
         if (turn == 0)
             explorer->handleInput(e, map);
     }
@@ -79,8 +97,8 @@ void Game::cleanup() {
     SDL_Quit();
 }
 
-void Game::run() {
-    init();
+void Game::run(const std::string& stage) {
+    init(stage);
     while (isRunning) {
         handleEvents();
         update();

@@ -2,9 +2,10 @@
 #include <iostream>
 #include <cmath>
 
-Character::Character(SDL_Renderer* renderer, const std::string& path, int startX, int startY, int tileSize)
+Character::Character(SDL_Renderer* renderer, const std::string& baseName, const std::string& stage, int startX, int startY, int tileSize)
     : renderer(renderer), x(startX), y(startY), tileSize(tileSize), fx((float)startX), fy((float)startY)
 {
+    std::string path = baseName + stage + ".png";
     texture = IMG_LoadTexture(renderer, path.c_str());
     if (!texture)
         std::cerr << "Failed to load texture: " << path << " | " << SDL_GetError() << std::endl;
