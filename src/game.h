@@ -2,14 +2,17 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <iostream>
-#include "map.h"
+#include "ingame/map.h"
+#include "ingame/background.h"
 #include "entities/explorer.h"
 #include "entities/mummy.h"
+#include "ingame/background.h"
 
 class Game {
 private:
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
+    Background* background = nullptr;
     bool isRunning = false;
     int turn = 0; // 0 = Explorer, 1 = Mummy
     int mummyStepsLeft = 0;
@@ -26,7 +29,6 @@ public:
     void init(const std::string& stage);
     void handleEvents();
     void update();
-    void recalcLayout(int winW, int winH);
     void render();
     void cleanup();
     void run(const std::string& stage);
