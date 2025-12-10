@@ -15,6 +15,9 @@ private:
     int x = 0, y = 0;
     int w = 0, h = 0;
 
+    // wrap width in pixels, 0 = no wrap
+    int wrapWidth = 0;
+
     bool updateTexture();
 
 public:
@@ -28,6 +31,9 @@ public:
     bool setText(const std::string& text);
     bool setFontSize(int size); // recreates font
     void setColor(SDL_Color c);
+
+    // set wrap width in pixels (0 = disabled)
+    void setWrapWidth(int px);
 
     // positioning
     void setPosition(int px, int py);

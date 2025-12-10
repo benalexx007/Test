@@ -1,12 +1,15 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <iostream>
 #include "ingame/map.h"
 #include "ingame/background.h"
+#include "ingame/panel.h"
 #include "entities/explorer.h"
 #include "entities/mummy.h"
-#include "ingame/background.h"
+#include "text.h"
+#include "functions.h"
 
 class Game {
 private:
@@ -25,6 +28,9 @@ public:
     Map* map = nullptr;
     Explorer* explorer = nullptr;
     Mummy* mummy = nullptr;
+    // in-game UI panel on the right side
+    IngamePanel* ingamePanel = nullptr;
+    Panel* settingsPanel = nullptr;
 
     void init(const std::string& stage);
     void handleEvents();

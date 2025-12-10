@@ -2,7 +2,7 @@
 #include <iostream>
 #include <cmath>
 
-Character::Character(SDL_Renderer* renderer, const std::string& baseName, const std::string& stage, int startX, int startY, int tileSize)
+Character::Character(SDL_Renderer *renderer, const std::string &baseName, const std::string &stage, int startX, int startY, int tileSize)
     : renderer(renderer), x(startX), y(startY), tileSize(tileSize), fx((float)startX), fy((float)startY)
 {
     std::string path = baseName + stage + ".png";
@@ -13,24 +13,32 @@ Character::Character(SDL_Renderer* renderer, const std::string& baseName, const 
 
 Character::~Character() { SDL_DestroyTexture(texture); }
 
-void Character::render(int offsetX, int offsetY) {
-    SDL_FRect rect = { fx * tileSize + offsetX, fy * tileSize + offsetY, (float)tileSize, (float)tileSize };
+void Character::render(int offsetX, int offsetY)
+{
+    SDL_FRect rect = {fx * tileSize + offsetX, (fy - 1.0 / 4.0) * tileSize + offsetY, (float)tileSize, (float)tileSize * 5 / 4};
     SDL_RenderTexture(renderer, texture, NULL, &rect);
 }
 
-bool Character::canMoveTo(Map* map, int nx, int ny) {
+bool Character::canMoveTo(Map *map, int nx, int ny)
+{
     return !map->isWall(nx, ny);
 }
-bool Character::isAtRest() const {
+bool Character::isAtRest() const
+{
     return std::fabs(fx - x) < 0.01f && std::fabs(fy - y) < 0.01f;
 }
-void Character::moveTo(int nx, int ny) {
-    x = nx; y = ny;
+void Character::moveTo(int nx, int ny)
+{
+    x = nx;
+    y = ny;
 }
 
-void Character::updatePosition(float speed) {
+void Character::updatePosition(float speed)
+{
     fx += (x - fx) * speed;
     fy += (y - fy) * speed;
-    if (std::fabs(fx - x) < 0.01f) fx = (float)x;
-    if (std::fabs(fy - y) < 0.01f) fy = (float)y;
+    if (std::fabs(fx - x) < 0.01f)
+        fx = (float)x;
+    if (std::fabs(fy - y) < 0.01f)
+        fy = (float)y;
 }

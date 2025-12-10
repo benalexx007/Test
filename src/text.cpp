@@ -13,13 +13,14 @@ bool Text::create(SDL_Renderer* rend, const std::string& fPath, int fSize, const
     fontSize = fSize;
     currentText = text;
     color = col;
+    wrapWidth = 0;
 
     if (!renderer) { std::cerr << "Text::create - no renderer\n"; return false; }
 
     font = TTF_OpenFont(fontPath.c_str(), fontSize);
     if (!font) {
-        std::cerr << "Text::create - TTF_OpenFont failed for " << fontPath << " | " << TTF_GetError() << "\n";
-        return false;
+        std::cerr << "Text::create - TTF_OpenFont failed for " << fontPath << " | " << SDL_GetError() << "\n";
+         return false;
     }
 
     // build texture for initial text (may be empty)
@@ -39,23 +40,34 @@ bool Text::updateTexture()
 
     if (!font || !renderer) return false;
 
-    // render to surface then create texture
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, currentText.c_str(), color);
+    SDL_Surface* surf = nullptr;
+    if (wrapWidth > 0) {
+        // use wrapped rendering when wrapWidth set
+        // SDL_ttf (SDL3) blended wrapped signature:
+        // TTF_RenderText_Blended_Wrapped(TTF_Font *font, const char *text, size_t length, SDL_Color fg, int wrap_width)
+        surf = TTF_RenderText_Blended_Wrapped(font, currentText.c_str(), 0, color, wrapWidth);
+    } else {
+        // single-line blended render
+        // SDL_ttf (SDL3) blended signature:
+        // TTF_RenderText_Blended(TTF_Font *font, const char *text, size_t length, SDL_Color fg)
+        surf = TTF_RenderText_Blended(font, currentText.c_str(), 0, color);
+    }
+
     if (!surf) {
-        std::cerr << "Text::updateTexture - TTF_RenderUTF8_Blended failed | " << TTF_GetError() << "\n";
-        return false;
+        std::cerr << "Text::updateTexture - TTF_RenderText... failed | " << SDL_GetError() << "\n";
+         return false;
     }
 
     texture = SDL_CreateTextureFromSurface(renderer, surf);
     if (!texture) {
         std::cerr << "Text::updateTexture - SDL_CreateTextureFromSurface failed | " << SDL_GetError() << "\n";
-        SDL_FreeSurface(surf);
+        SDL_DestroySurface(surf);
         return false;
     }
 
     w = surf->w;
     h = surf->h;
-    SDL_FreeSurface(surf);
+    SDL_DestroySurface(surf);
     return true;
 }
 
@@ -75,8 +87,8 @@ bool Text::setFontSize(int size)
     }
     font = TTF_OpenFont(fontPath.c_str(), fontSize);
     if (!font) {
-        std::cerr << "Text::setFontSize - TTF_OpenFont failed for " << fontPath << " | " << TTF_GetError() << "\n";
-        return false;
+        std::cerr << "Text::setFontSize - TTF_OpenFont failed for " << fontPath << " | " << SDL_GetError() << "\n";
+         return false;
     }
     return updateTexture();
 }
@@ -84,6 +96,12 @@ bool Text::setFontSize(int size)
 void Text::setColor(SDL_Color c)
 {
     color = c;
+    updateTexture();
+}
+
+void Text::setWrapWidth(int px)
+{
+    wrapWidth = px > 0 ? px : 0;
     updateTexture();
 }
 
