@@ -79,7 +79,10 @@ void Start::init()
                 accountPanel = std::make_unique<AccountPanel>(renderer);
                 bool fileNowExists = user.read();
                 user.Init();
-                accountPanel->init(&user, fileNowExists, 1750, 900, [this]() {
+                // request panel size
+                const int panelW = 1750;
+                const int panelH = 900;
+                if (accountPanel->init(&user, fileNowExists, panelW, panelH, [this]() {
                     // after account created / changed: cleanup account button and panel, then recreate main buttons
                     if (playBtn) { playBtn->cleanup(); playBtn.reset(); }
                     if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
@@ -110,7 +113,12 @@ void Start::init()
                     } else {
                         settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
                     }
-                });
+                })) {
+                    // center within Start window
+                    int px = (winW - panelW) / 2;
+                    int py = (winH - panelH) / 2;
+                    accountPanel->setPosition(px, py);
+                }
             });
         }
     }

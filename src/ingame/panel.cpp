@@ -46,9 +46,14 @@ bool Panel::setBackgroundFromFile(const std::string& path)
     if (bgTexture) SDL_DestroyTexture(bgTexture);
     bgTexture = t;
 
-    // set panel size to the image's size
-    w = static_cast<int>(texW);
-    h = static_cast<int>(texH);
+    // set panel size to the image's size only if panel size is not already set.
+    // This allows callers to create a panel at a specific size (e.g. 1750x900)
+    // and have the background stretched to that size rather than forcing the
+    // panel to the image's native dimensions.
+    if (w == 0 && h == 0) {
+        w = static_cast<int>(texW);
+        h = static_cast<int>(texH);
+    }
 
     return true;
 }
@@ -296,16 +301,20 @@ AccountPanel::AccountPanel(SDL_Renderer* renderer) : Panel(renderer) {}
 
 bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged)
 {
-    // load panel background (owns texture and sets w/h)
+    // create panel at the requested size (panelW x panelH), then load background.
+    // The caller (Start) is responsible for positioning the panel so it can
+    // center it inside the actual window.
+    if (!create(renderer, 0, 0, winW, winH)) {
+        std::cerr << "AccountPanel::init - failed to create panel\n";
+        return false;
+    }
+
     if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
         std::cerr << "AccountPanel::init - failed to load background\n";
         return false;
     }
 
-    // center panel
-    int px = (winW - getWidth()) / 2;
-    int py = (winH - getHeight()) / 2;
-    setPosition(px, py);
+    // DO NOT setPosition here; caller will position the panel (e.g. center it)
 
     const SDL_Color TextColor = { 0xf9, 0xf2, 0x6a, 0xFF };
     const int BtnW = 350;
