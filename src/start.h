@@ -4,7 +4,7 @@
 #include <memory>
 #include "ingame/button.h"
 #include "ingame/background.h"
-#include "panel.h"
+#include "ingame/panel.h"
 #include "user.h"
 
 class Start {
@@ -31,6 +31,7 @@ private:
 
     std::unique_ptr<Button> playBtn;
     std::unique_ptr<Button> settingsBtn;
+    std::unique_ptr<Button> accountBtn;
 
     // account UI + user storage
     User user; // default filepath "users.bin"

@@ -9,7 +9,7 @@ Start::~Start() { cleanup(); }
 void Start::init()
 {
     SDL_Init(SDL_INIT_VIDEO);
-    TTF_Init() == 0;
+    TTF_Init();
 
     // create a new window + renderer (like Game)
     window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
@@ -59,29 +59,32 @@ void Start::init()
     if (hasFile) {
         createMainButtons();
     } else {
-        // single large button (700x170, line break after ACCOUNT)
-        const int BtnW = 700;
-        const int BtnH = 170;
-        const int TextSize = 96;
+        // single large button for account creation
+        const int BtnW = 840;
+        const int BtnH = 204;
+        const int TextSize = 72;
         int xCenter = (winW - BtnW) / 2;
         int yBtn = static_cast<int>(winH * 0.4f);
-        playBtn = std::make_unique<Button>(renderer);
-        if (!playBtn->create(renderer, xCenter, yBtn, BtnW, BtnH, "CREATE AN\nACCOUNT TO PLAY", TextSize, TextColor, "assets/font.ttf")) {
-            std::cerr << "Start::init - failed to create CreateAccount button\n";
+        accountBtn = std::make_unique<Button>(renderer);
+        if (!accountBtn->create(renderer, xCenter, yBtn, BtnW, BtnH, "CREATE AN\nACCOUNT TO PLAY", TextSize, TextColor, "assets/font.ttf")) {
+            std::cerr << "Start::init - failed to create account button\n";
         } else {
-            playBtn->setLabelPositionPercent(0.5f, 0.55f);
+            // set wrap width and wrap alignment for centered text
+            accountBtn->setLabelWrapWidth(BtnW - 40);
+            accountBtn->setLabelPositionPercent(0.5f, 0.74f);
             // when clicked, show AccountPanel; after sign-in, rebuild UI to normal
-            playBtn->setCallback([this]() {
+            accountBtn->setCallback([this]() {
                 // build AccountPanel and pass callback to refresh Start UI after signin
                 accountPanel.reset();
                 accountPanel = std::make_unique<AccountPanel>(renderer);
                 bool fileNowExists = user.read();
                 user.Init();
-                accountPanel->init(&user, fileNowExists, winW, winH, [this]() {
-                    // after account created / changed: recreate main buttons
-                    // cleanup the "create account" button and panel, then show normal UI
+                accountPanel->init(&user, fileNowExists, 1750, 900, [this]() {
+                    // after account created / changed: cleanup account button and panel, then recreate main buttons
                     if (playBtn) { playBtn->cleanup(); playBtn.reset(); }
                     if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
+                    if (accountBtn) { accountBtn->cleanup(); accountBtn.reset(); }
+
                     if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
                     // re-read user state
                     user.read();
@@ -128,6 +131,7 @@ void Start::handleEvents()
         // forward to buttons (they check coords themselves)
         if (playBtn) playBtn->handleEvent(e);
         if (settingsBtn) settingsBtn->handleEvent(e);
+        if (accountBtn) accountBtn->handleEvent(e);
 
         // forward to account panel if visible
         if (accountPanel) accountPanel->handleEvent(e);
@@ -168,6 +172,7 @@ void Start::render()
     // draw buttons
     if (playBtn) playBtn->render();
     if (settingsBtn) settingsBtn->render();
+    if (accountBtn) accountBtn->render();
 
     // render account panel over other UI if present
     if (accountPanel) accountPanel->render();
@@ -179,6 +184,7 @@ void Start::cleanup()
 {
     if (playBtn) { playBtn->cleanup(); playBtn.reset(); }
     if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
+    if (accountBtn) { accountBtn->cleanup(); accountBtn.reset(); }
 
     if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
 
