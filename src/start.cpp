@@ -11,22 +11,18 @@ void Start::init()
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
 
-    // create a new window + renderer (like Game)
     window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, NULL);
     SDL_MaximizeWindow(window);
 
-    // load background image (single image file)
     bgTexture = IMG_LoadTexture(renderer, "assets/images/background/background.png");
 
     const SDL_Color TextColor = { 0xf9, 0xf2, 0x6a, 0xFF };
 
-    // detect whether users file exists
-    bool hasFile = user.read(); // false when file missing
+    bool hasFile = user.read();
     user.Init();
 
     auto createMainButtons = [this, &TextColor]() {
-        // create PLAY button (centered)
         const int BtnW = 350;
         const int BtnH = 85;
         int xCenter = (winW - BtnW) / 2;
@@ -41,7 +37,6 @@ void Start::init()
             });
         }
 
-        // create SETTINGS button below play
         const int Padding = 30;
         int ySettings = yPlay + BtnH + Padding;
         settingsBtn = std::make_unique<Button>(renderer);
@@ -55,71 +50,24 @@ void Start::init()
         }
     };
 
-    // If users file exists show normal UI; otherwise show single large CREATE AN ACCOUNT button.
     if (hasFile) {
         createMainButtons();
     } else {
-        // single large button for account creation
-        const int BtnW = 840;
-        const int BtnH = 204;
-        const int TextSize = 72;
-        int xCenter = (winW - BtnW) / 2;
-        int yBtn = static_cast<int>(winH * 0.4f);
-        accountBtn = std::make_unique<Button>(renderer);
-        if (!accountBtn->create(renderer, xCenter, yBtn, BtnW, BtnH, "CREATE AN\nACCOUNT TO PLAY", TextSize, TextColor, "assets/font.ttf")) {
-            std::cerr << "Start::init - failed to create account button\n";
-        } else {
-            // set wrap width and wrap alignment for centered text
-            accountBtn->setLabelWrapWidth(BtnW - 40);
-            accountBtn->setLabelPositionPercent(0.5f, 0.74f);
-            // when clicked, show AccountPanel; after sign-in, rebuild UI to normal
-            accountBtn->setCallback([this]() {
-                // build AccountPanel and pass callback to refresh Start UI after signin
-                accountPanel.reset();
-                accountPanel = std::make_unique<AccountPanel>(renderer);
-                bool fileNowExists = user.read();
-                user.Init();
-                // request panel size
-                const int panelW = 1750;
-                const int panelH = 900;
-                if (accountPanel->init(&user, fileNowExists, panelW, panelH, [this]() {
-                    // after account created / changed: cleanup account button and panel, then recreate main buttons
-                    if (playBtn) { playBtn->cleanup(); playBtn.reset(); }
-                    if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
-                    if (accountBtn) { accountBtn->cleanup(); accountBtn.reset(); }
-
-                    if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
-                    // re-read user state
-                    user.read();
-                    user.Init();
-                    // create main buttons now
-                    const SDL_Color TextColorLocal = { 0xf9, 0xf2, 0x6a, 0xFF };
-                    // duplicate createMainButtons body here (cannot capture the local lambda)
-                    const int BtnW2 = 350;
-                    const int BtnH2 = 85;
-                    int xCenter2 = (winW - BtnW2) / 2;
-                    int yPlay2 = static_cast<int>(winH * 0.4f);
-                    playBtn = std::make_unique<Button>(renderer);
-                    if (!playBtn->create(renderer, xCenter2, yPlay2, BtnW2, BtnH2, "PLAY", 72, TextColorLocal, "assets/font.ttf")) {
-                        std::cerr << "Start - failed to create Play button after signin\n";
-                    } else {
-                        playBtn->setLabelPositionPercent(0.5f, 0.70f);
-                    }
-                    const int Padding2 = 30;
-                    int ySettings2 = yPlay2 + BtnH2 + Padding2;
-                    settingsBtn = std::make_unique<Button>(renderer);
-                    if (!settingsBtn->create(renderer, xCenter2, ySettings2, 350, 85, "SETTINGS", 72, TextColorLocal, "assets/font.ttf")) {
-                        std::cerr << "Start - failed to create Settings button after signin\n";
-                    } else {
-                        settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
-                    }
-                })) {
-                    // center within Start window
-                    int px = (winW - panelW) / 2;
-                    int py = (winH - panelH) / 2;
-                    accountPanel->setPosition(px, py);
-                }
-            });
+        // No user file: show account creation panel
+        accountPanel.reset();
+        accountPanel = std::make_unique<AccountPanel>(renderer);
+        const int panelW = 1750;
+        const int panelH = 900;
+        if (accountPanel->init(&user, false, panelW, panelH, [this, &createMainButtons]() {
+            // After account created: show main buttons
+            if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
+            user.read();
+            user.Init();
+            createMainButtons();
+        })) {
+            int px = (winW - panelW) / 2;
+            int py = (winH - panelH) / 2;
+            accountPanel->setPosition(px, py);
         }
     }
 
@@ -136,13 +84,17 @@ void Start::handleEvents()
         if (e.type == SDL_EVENT_QUIT) {
             isRunning = false;
         }
-        // forward to buttons (they check coords themselves)
-        if (playBtn) playBtn->handleEvent(e);
-        if (settingsBtn) settingsBtn->handleEvent(e);
-        if (accountBtn) accountBtn->handleEvent(e);
+        // forward to account panel first (if visible, it consumes events inside the panel)
+        bool panelActive = false;
+        if (accountPanel) {
+            accountPanel->handleEvent(e);
+            panelActive = true;
+        }
 
-        // forward to account panel if visible
-        if (accountPanel) accountPanel->handleEvent(e);
+        if (!panelActive) {
+            if (playBtn) playBtn->handleEvent(e);
+            if (settingsBtn) settingsBtn->handleEvent(e);
+        }
 
         // handle window resize by scaling renderer (keep aspect behavior simple)
         if (e.type == SDL_EVENT_WINDOW_RESIZED)
@@ -180,7 +132,6 @@ void Start::render()
     // draw buttons
     if (playBtn) playBtn->render();
     if (settingsBtn) settingsBtn->render();
-    if (accountBtn) accountBtn->render();
 
     // render account panel over other UI if present
     if (accountPanel) accountPanel->render();
@@ -192,7 +143,6 @@ void Start::cleanup()
 {
     if (playBtn) { playBtn->cleanup(); playBtn.reset(); }
     if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
-    if (accountBtn) { accountBtn->cleanup(); accountBtn.reset(); }
 
     if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
 

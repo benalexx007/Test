@@ -31,7 +31,6 @@ private:
 
     std::unique_ptr<Button> playBtn;
     std::unique_ptr<Button> settingsBtn;
-    std::unique_ptr<Button> accountBtn;
 
     // account UI + user storage
     User user; // default filepath "users.bin"

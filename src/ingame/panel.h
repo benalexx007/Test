@@ -8,6 +8,7 @@
 #include "button.h"
 #include "../text.h"
 #include "../user.h"
+#include "textbox.h"
 
 class Panel {
 public:
@@ -49,6 +50,16 @@ public:
                   HAlign halign = HAlign::Left,
                   VAlign valign = VAlign::Top);
 
+    // add textbox
+    Textbox* addTextbox(int localX, int localY, int w, int h,
+                    const std::string& bgPath,
+                    const std::string& placeholderText,
+                    int fontSize = 72,
+                    SDL_Color textColor = {255,255,255,255},
+                    const std::string& fontPath = "assets/font.ttf",
+                    HAlign halign = HAlign::Left,
+                    VAlign valign = VAlign::Top);
+
     // event forwarding (mouse coords are translated into panel-local for children)
     void handleEvent(const SDL_Event& e);
 
@@ -65,10 +76,11 @@ protected:
     SDL_Renderer* renderer = nullptr;
 private:
     struct Child {
-        enum class Type { Button, Text, Image } type;
+        enum class Type { Button, Text, Image, Textbox } type;
         std::unique_ptr<Button> button;
         std::unique_ptr<Text> text;
-        SDL_Texture* image = nullptr; // texture not owned by panel unless created via setBackgroundFromFile
+        std::unique_ptr<Textbox> textbox;
+        SDL_Texture* image = nullptr;
         int localX = 0;
         int localY = 0;
         int w = 0, h = 0;

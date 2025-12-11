@@ -2,6 +2,7 @@
 #include <iostream>
 #include "../functions.h"
 #include "../game.h"
+#include "textbox.h"
 
 Panel::Panel(SDL_Renderer* renderer) : renderer(renderer) {}
 Panel::~Panel() { cleanup(); }
@@ -127,6 +128,28 @@ void Panel::addImage(SDL_Texture* tex, int localX, int localY, int iw, int ih, H
     children.push_back(std::move(c));
 }
 
+Textbox* Panel::addTextbox(int localX, int localY, int w, int h,
+                           const std::string& bgPath,
+                           const std::string& placeholderText,
+                           int fontSize, SDL_Color textColor, const std::string& fontPath,
+                           HAlign halign, VAlign valign)
+{
+    if (!renderer) return nullptr;
+    Child c;
+    c.type = Child::Type::Textbox;
+    c.localX = localX;
+    c.localY = localY;
+    c.w = w; c.h = h;
+    c.halign = halign; c.valign = valign;
+    c.textbox = std::make_unique<Textbox>(renderer);
+    if (!c.textbox->create(renderer, 0, 0, w, h, bgPath, placeholderText, fontSize, textColor, fontPath)) {
+        std::cerr << "Panel::addTextbox - failed to create textbox\n";
+        return nullptr;
+    }
+    children.push_back(std::move(c));
+    return children.back().textbox.get();
+}
+
 SDL_FRect Panel::computeChildDst(const Child& c) const
 {
     float absX = static_cast<float>(x);
@@ -150,14 +173,20 @@ SDL_FRect Panel::computeChildDst(const Child& c) const
 
 void Panel::handleEvent(const SDL_Event& e)
 {
-    // only forward events that happen inside panel
-    if (!renderer) return;
+    // Always forward keyboard/text events and mouse events to textboxes,
+    // because textboxes need to react to keyboard input even if the event
+    // isn't a mouse event.
+    // First, update textbox positions/sizes and forward the event.
+    for (auto &c : children) {
+        if (c.type == Child::Type::Textbox && c.textbox) {
+            SDL_FRect dst = computeChildDst(c);
+            c.textbox->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
+            c.textbox->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
+            c.textbox->handleEvent(e); // forward ALL events (mouse + keyboard + text)
+        }
+    }
 
-    // determine if this event has mouse coords and whether it's inside panel
-    auto inside = [&](int mx, int my)->bool {
-        return mx >= x && mx < x + w && my >= y && my < y + h;
-    };
-
+    // Now handle mouse-only behavior for clicking buttons
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP ||
         e.type == SDL_EVENT_MOUSE_MOTION || e.type == SDL_EVENT_MOUSE_WHEEL)
     {
@@ -165,29 +194,21 @@ void Panel::handleEvent(const SDL_Event& e)
         if (e.type == SDL_EVENT_MOUSE_MOTION) { mx = e.motion.x; my = e.motion.y; }
         else { mx = e.button.x; my = e.button.y; }
 
-        if (!inside(mx, my)) return; // ignore events outside panel
+        auto inside = [&](int mx_, int my_)->bool {
+            return mx_ >= x && mx_ < x + w && my_ >= y && my_ < y + h;
+        };
+        if (!inside(mx, my)) return;
 
-        // Translate event coords to correct child and forward only to buttons (buttons need absolute coords)
+        // forward mouse to the first button under the cursor (topmost)
         for (auto &c : children) {
             if (c.type != Child::Type::Button) continue;
-            // compute absolute child rect
             SDL_FRect dst = computeChildDst(c);
             bool overChild = (mx >= dst.x && mx < dst.x + dst.w && my >= dst.y && my < dst.y + dst.h);
-            // create a copy of event, but mouse coords should be in window coords (Button expects window coords)
-            // Button::handleEvent only uses e.motion.x / e.button.x and compares to rect, so passing original coords is fine
-            // but we may still want to forward all events so the button can handle non-mouse events if needed.
-            // Forward only events that intersect the child.
             if (overChild) {
-                // ensure the button has correct absolute rect before handling events
                 c.button->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
                 c.button->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
-                // forward original event (Button handles coordinates in window coords)
                 c.button->handleEvent(e);
-            } else {
-                // also send motion events so button can update hover false
-                if (e.type == SDL_EVENT_MOUSE_MOTION || e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-                    c.button->handleEvent(e);
-                }
+                return;
             }
         }
     }
@@ -209,7 +230,6 @@ void Panel::render()
         switch (c.type) {
             case Child::Type::Button:
                 if (c.button) {
-                    // set button absolute position before render
                     c.button->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
                     c.button->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
                     c.button->render();
@@ -218,7 +238,6 @@ void Panel::render()
 
             case Child::Type::Text:
                 if (c.text) {
-                    // position text and draw
                     c.text->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
                     c.text->render();
                 }
@@ -227,6 +246,14 @@ void Panel::render()
             case Child::Type::Image:
                 if (c.image) {
                     SDL_RenderTexture(renderer, c.image, nullptr, &dst);
+                }
+                break;
+            
+            case Child::Type::Textbox:
+                if (c.textbox) {
+                    c.textbox->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
+                    c.textbox->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
+                    c.textbox->render();
                 }
                 break;
         }
@@ -262,34 +289,34 @@ bool IngamePanel::initForStage(const std::string& stage, Game* owner,
     }
 
     // add buttons (centered, stacked with 16px padding)
-    SDL_Color txtCol = { 0xf9, 0xf2, 0x6a, 0xFF };
+    SDL_Color btnCol = { 0xf9, 0xf2, 0x6a, 0xFF };
     const int padding = 16;
     const int widthBtn = 350;
     const int heightBtn = 85;
 
     int yUndo = static_cast<int>(getHeight() * 0.35f);
-    Button* undoBtn = addButton(0, yUndo, widthBtn, heightBtn, "UNDO", 72, txtCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    Button* undoBtn = addButton(0, yUndo, widthBtn, heightBtn, "UNDO", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (undoBtn) {
         undoBtn->setLabelPositionPercent(0.5f, 0.70f);
         if (owner) undoBtn->setCallback([owner]() { undo(owner); });
     }
 
     int yRedo = yUndo + (undoBtn ? undoBtn->getHeight() : 0) + padding;
-    Button* redoBtn = addButton(0, yRedo, widthBtn, heightBtn, "REDO", 72, txtCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    Button* redoBtn = addButton(0, yRedo, widthBtn, heightBtn, "REDO", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (redoBtn) {
         redoBtn->setLabelPositionPercent(0.5f, 0.70f);
         if (owner) redoBtn->setCallback([owner]() { redo(owner); });
     }
 
     int yReset = yRedo + (redoBtn ? redoBtn->getHeight() : 0) + padding;
-    Button* resetBtn = addButton(0, yReset, widthBtn, heightBtn, "RESET", 72, txtCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    Button* resetBtn = addButton(0, yReset, widthBtn, heightBtn, "RESET", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (resetBtn) {
         resetBtn->setLabelPositionPercent(0.5f, 0.70f);
         if (owner) resetBtn->setCallback([owner]() { reset(owner); });
     }
 
     int ySettings = yReset + (resetBtn ? resetBtn->getHeight() : 0) + padding;
-    Button* settingsBtn = addButton(0, ySettings, widthBtn, heightBtn, "SETTINGS", 72, txtCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    Button* settingsBtn = addButton(0, ySettings, widthBtn, heightBtn, "SETTINGS", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (settingsBtn) {
         settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
         if (owner) settingsBtn->setCallback([owner]() { settings(owner); });
@@ -301,9 +328,7 @@ AccountPanel::AccountPanel(SDL_Renderer* renderer) : Panel(renderer) {}
 
 bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged)
 {
-    // create panel at the requested size (panelW x panelH), then load background.
-    // The caller (Start) is responsible for positioning the panel so it can
-    // center it inside the actual window.
+    // create panel at the requested size
     if (!create(renderer, 0, 0, winW, winH)) {
         std::cerr << "AccountPanel::init - failed to create panel\n";
         return false;
@@ -314,70 +339,106 @@ bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::f
         return false;
     }
 
-    // DO NOT setPosition here; caller will position the panel (e.g. center it)
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+    const SDL_Color btnCol = { 0xf9, 0xf2, 0x6a, 0xFF };
 
-    const SDL_Color TextColor = { 0xf9, 0xf2, 0x6a, 0xFF };
-    const int BtnW = 350;
-    const int BtnH = 85;
-    const int Padding = 16;
-    const int FontSize = 72;
-
-    // helper to detect "on an account" state
-    auto onAccount = [&user]() -> bool {
-        if (!user) return false;
-        std::string uname = user->getUsername();
-        if (uname.empty()) return false;
-        if (uname.size() == 1 && uname[0] == '\0') return false;
-        return true;
-    };
-
-    // Build list of labels depending on file & session state
-    std::vector<std::string> labels;
+    // On first run (no user file): show account creation UI with textboxes
     if (!hasUserFile) {
-        // no users file -> show only Sign In (centered)
-        labels.push_back("SIGN IN");
+        // Title: start at panel Y + 35% of panel height
+        // Make title font ~20% of panel height (clamped)
+        int titleFontSize = 72;
+        int titleLocalY = static_cast<int>(getHeight() * 0.35f);
+        addText("assets/font.ttf", titleFontSize, "CREATE AN ACCOUNT", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+        // Cursor starts below the title (title height + padding)
+        int paddingAfterTitle = 30;
+        int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
+
+        // Textbox sizes and spacing
+        int tbW = 1500;
+        int tbH = 85;
+        int tbSpacing = 24;
+
+        // Username textbox (centered)
+        Textbox* usernameTb = addTextbox(0, cursorY, tbW, tbH, "assets/images/textbox/inputTextbox.png", "USERNAME", 72, {0,0,0,255}, "assets/font.ttf", HAlign::Center, VAlign::Top);
+        cursorY += tbH + tbSpacing;
+
+        // Password textbox (centered)
+        Textbox* passwordTb = addTextbox(0, cursorY, tbW, tbH, "assets/images/textbox/inputTextbox.png", "PASSWORD", 72, {0,0,0,255}, "assets/font.ttf", HAlign::Center, VAlign::Top);
+        cursorY += tbH + 40; // a bit more space before confirm
+
+        // Confirm button centered below textboxes
+        Button* confirmBtn = addButton(0, cursorY, 350, 85, "CONFIRM", 72, {0xf9,0xf2,0x6a,0xFF}, "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (confirmBtn) {
+            confirmBtn->setLabelPositionPercent(0.5f, 0.70f);
+            confirmBtn->setCallback([user, usernameTb, passwordTb, onChanged]() {
+                if (!user || !usernameTb || !passwordTb) return;
+                std::string username = usernameTb->getText();
+                std::string password = passwordTb->getText();
+                if (username.empty() || password.empty()) {
+                    std::cerr << "AccountPanel: username or password is empty\n";
+                    return;
+                }
+                bool ok = user->signin(username, password);
+                if (!ok) {
+                    std::cerr << "AccountPanel: signin failed\n";
+                } else {
+                    if (onChanged) onChanged();
+                }
+            });
+        }
     } else {
-        // file exists -> show Sign In + Log In (and Log Out if already on account)
+        // User file exists: show login options (existing code)
+        const int BtnW = 350;
+        const int BtnH = 85;
+        const int Padding = 16;
+        const int FontSize = 72;
+
+        auto onAccount = [&user]() -> bool {
+            if (!user) return false;
+            std::string uname = user->getUsername();
+            if (uname.empty()) return false;
+            if (uname.size() == 1 && uname[0] == '\0') return false;
+            return true;
+        };
+
+        std::vector<std::string> labels;
         labels.push_back("SIGN IN");
         labels.push_back("LOG IN");
         if (onAccount()) labels.push_back("LOG OUT");
-    }
 
-    int n = static_cast<int>(labels.size());
-    int totalH = n * BtnH + (n - 1) * Padding;
-    int startY = (getHeight() - totalH) / 2;
+        int n = static_cast<int>(labels.size());
+        int totalH = n * BtnH + (n - 1) * Padding;
+        int startY = (getHeight() - totalH) / 2;
 
-    for (int i = 0; i < n; ++i) {
-        int localY = startY + i * (BtnH + Padding);
-        Button* b = addButton(0, localY, BtnW, BtnH, labels[i], FontSize, TextColor, "assets/font.ttf", HAlign::Center, VAlign::Top);
-        if (!b) continue;
-        b->setLabelPositionPercent(0.5f, 0.70f);
+        for (int i = 0; i < n; ++i) {
+            int localY = startY + i * (BtnH + Padding);
+            Button* b = addButton(0, localY, BtnW, BtnH, labels[i], FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+            if (!b) continue;
+            b->setLabelPositionPercent(0.5f, 0.70f);
 
-        // Wire minimal callbacks:
-        std::string lbl = labels[i];
-        if (lbl == "SIGN IN") {
-            // For first-run (no file) this will create a simple default account and notify Start to refresh UI.
-            b->setCallback([user, onChanged]() {
-                if (!user) return;
-                // create a simple default account so users.bin exists.
-                // You can replace with a proper username/password input later.
-                bool ok = user->signin("player", ""); // create user file
-                if (!ok) std::cerr << "AccountPanel: signin failed\n";
-                if (onChanged) onChanged();
-            });
-        } else if (lbl == "LOG IN") {
-            // placeholder: no-op for now (could open login form)
-            b->setCallback([]() {
-                // TODO: open login dialog
-            });
-        } else if (lbl == "LOG OUT") {
-            b->setCallback([user, onChanged]() {
-                if (!user) return;
-                user->logout();
-                if (onChanged) onChanged();
-            });
+            std::string lbl = labels[i];
+            if (lbl == "SIGN IN") {
+                b->setCallback([user, onChanged]() {
+                    if (!user) return;
+                    bool ok = user->signin("player", "");
+                    if (!ok) std::cerr << "AccountPanel: signin failed\n";
+                    if (onChanged) onChanged();
+                });
+            } else if (lbl == "LOG IN") {
+                b->setCallback([]() {
+                    // TODO: open login dialog
+                });
+            } else if (lbl == "LOG OUT") {
+                b->setCallback([user, onChanged]() {
+                    if (!user) return;
+                    user->logout();
+                    if (onChanged) onChanged();
+                });
+            }
         }
     }
 
     return true;
 }
+

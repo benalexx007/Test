@@ -15,7 +15,12 @@ Character::~Character() { SDL_DestroyTexture(texture); }
 
 void Character::render(int offsetX, int offsetY)
 {
-    SDL_FRect rect = {fx * tileSize + offsetX, (fy - 1.0 / 4.0) * tileSize + offsetY, (float)tileSize, (float)tileSize * 5 / 4};
+    SDL_FRect rect = {
+        fx * static_cast<float>(tileSize) + static_cast<float>(offsetX),
+        (fy - 1.0f / 4.0f) * static_cast<float>(tileSize) + static_cast<float>(offsetY),
+        static_cast<float>(tileSize),
+        static_cast<float>(tileSize) * 5.0f / 4.0f
+    };
     SDL_RenderTexture(renderer, texture, NULL, &rect);
 }
 
