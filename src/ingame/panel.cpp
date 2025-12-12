@@ -446,6 +446,14 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
 {
     if (!create(renderer, 0, 0, winW, winH)) return false;
     if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
-    // Tạm thời không thêm text/button, chỉ hiển thị background
+
+    // Thêm tiêu đề SETTINGS
+    const SDL_Color titleCol = {255, 0, 0, 255};
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.35f);
+    addText("assets/font.ttf", titleFontSize, "SETTINGS", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+
+    // Tạm thời chưa thêm button
     return true;
 }
