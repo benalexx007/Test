@@ -24,6 +24,7 @@ public:
 private:
     void handleEvents();
     void render();
+    void createMainButtons();
 
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
@@ -35,6 +36,7 @@ private:
     // account UI + user storage
     User user; // default filepath "users.bin"
     std::unique_ptr<AccountPanel> accountPanel;
+    bool pendingShowMainButtons = false;
 
     bool isRunning = false;
     int winW = 1920;

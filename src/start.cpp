@@ -22,33 +22,8 @@ void Start::init()
     bool hasFile = user.read();
     user.Init();
 
-    auto createMainButtons = [this, &TextColor]() {
-        const int BtnW = 350;
-        const int BtnH = 85;
-        int xCenter = (winW - BtnW) / 2;
-        int yPlay = static_cast<int>(winH * 0.4f);
-        playBtn = std::make_unique<Button>(renderer);
-        if (!playBtn->create(renderer, xCenter, yPlay, BtnW, BtnH, "PLAY", 72, TextColor, "assets/font.ttf")) {
-            std::cerr << "Start::init - failed to create Play button\n";
-        } else {
-            playBtn->setLabelPositionPercent(0.5f, 0.70f);
-            playBtn->setCallback([this]() {
-                // TODO: start the game
-            });
-        }
-
-        const int Padding = 30;
-        int ySettings = yPlay + BtnH + Padding;
-        settingsBtn = std::make_unique<Button>(renderer);
-        if (!settingsBtn->create(renderer, xCenter, ySettings, 350, 85, "SETTINGS", 72, TextColor, "assets/font.ttf")) {
-            std::cerr << "Start::init - failed to create Settings button\n";
-        } else {
-            settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
-            settingsBtn->setCallback([]() {
-                // TODO: open settings window
-            });
-        }
-    };
+    // createMainButtons moved to member function
+    (void)TextColor; // silence unused warning until member method uses it
 
     if (hasFile) {
         createMainButtons();
@@ -58,12 +33,14 @@ void Start::init()
         accountPanel = std::make_unique<AccountPanel>(renderer);
         const int panelW = 1750;
         const int panelH = 900;
-        if (accountPanel->init(&user, false, panelW, panelH, [this, &createMainButtons]() {
-            // After account created: show main buttons
-            if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
+        if (accountPanel->init(&user, false, panelW, panelH, [this]() {
+            // Request showing main buttons — defer actual cleanup until
+            // we're out of event handling to avoid deleting the panel
+            // while it's processing its own event.
+            pendingShowMainButtons = true;
+            // refresh user state now (safe)
             user.read();
             user.Init();
-            createMainButtons();
         })) {
             int px = (winW - panelW) / 2;
             int py = (winH - panelH) / 2;
@@ -73,6 +50,36 @@ void Start::init()
 
     isRunning = true;
     SDL_MaximizeWindow(window);
+}
+
+void Start::createMainButtons()
+{
+    const SDL_Color TextColor = { 0xf9, 0xf2, 0x6a, 0xFF };
+    const int BtnW = 350;
+    const int BtnH = 85;
+    int xCenter = (winW - BtnW) / 2;
+    int yPlay = static_cast<int>(winH * 0.4f);
+    playBtn = std::make_unique<Button>(renderer);
+    if (!playBtn->create(renderer, xCenter, yPlay, BtnW, BtnH, "PLAY", 72, TextColor, "assets/font.ttf")) {
+        std::cerr << "Start::createMainButtons - failed to create Play button\n";
+    } else {
+        playBtn->setLabelPositionPercent(0.5f, 0.70f);
+        playBtn->setCallback([this]() {
+            // TODO: start the game
+        });
+    }
+
+    const int Padding = 30;
+    int ySettings = yPlay + BtnH + Padding;
+    settingsBtn = std::make_unique<Button>(renderer);
+    if (!settingsBtn->create(renderer, xCenter, ySettings, 350, 85, "SETTINGS", 72, TextColor, "assets/font.ttf")) {
+        std::cerr << "Start::createMainButtons - failed to create Settings button\n";
+    } else {
+        settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
+        settingsBtn->setCallback([]() {
+            // TODO: open settings window
+        });
+    }
 }
 
 void Start::handleEvents()
@@ -115,6 +122,14 @@ void Start::handleEvents()
             curW = w;
             curH = h;
         }
+    }
+
+    // If account panel requested to be closed/show main buttons, perform cleanup now
+    if (pendingShowMainButtons) {
+        if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
+        // user state was refreshed when request created; recreate main buttons
+        createMainButtons();
+        pendingShowMainButtons = false;
     }
 }
 
