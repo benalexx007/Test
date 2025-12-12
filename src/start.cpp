@@ -76,8 +76,23 @@ void Start::createMainButtons()
         std::cerr << "Start::createMainButtons - failed to create Settings button\n";
     } else {
         settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
-        settingsBtn->setCallback([]() {
-            // TODO: open settings window
+        settingsBtn->setCallback([this]() {
+            // toggle settings panel
+            if (settingsVisible) {
+                settingsVisible = false;
+                if (settingsPanel) { settingsPanel->cleanup(); settingsPanel.reset(); }
+                return;
+            }
+            settingsPanel = std::make_unique<SettingsPanel>(renderer);
+            const int panelW = 1750, panelH = 900;
+            if (!settingsPanel->init(&user, panelW, panelH, nullptr)) { // hoặc nullptr nếu không cần user
+                settingsPanel.reset();
+                return;
+            }
+            int px = (winW - panelW) / 2;
+            int py = (winH - panelH) / 2;
+            settingsPanel->setPosition(px, py);
+            settingsVisible = true;
         });
     }
 }
@@ -95,6 +110,10 @@ void Start::handleEvents()
         bool panelActive = false;
         if (accountPanel) {
             accountPanel->handleEvent(e);
+            panelActive = true;
+        }
+        if (!panelActive && settingsVisible && settingsPanel) {
+            settingsPanel->handleEvent(e);
             panelActive = true;
         }
 
@@ -147,9 +166,8 @@ void Start::render()
     // draw buttons
     if (playBtn) playBtn->render();
     if (settingsBtn) settingsBtn->render();
-
-    // render account panel over other UI if present
     if (accountPanel) accountPanel->render();
+    if (settingsVisible && settingsPanel) settingsPanel->render();
 
     SDL_RenderPresent(renderer);
 }
@@ -160,7 +178,7 @@ void Start::cleanup()
     if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
 
     if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
-
+    if (settingsVisible && settingsPanel) { settingsPanel->cleanup(); settingsPanel.reset(); }
     if (bgTexture) { SDL_DestroyTexture(bgTexture); bgTexture = nullptr; }
 
 

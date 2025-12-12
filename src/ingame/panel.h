@@ -114,3 +114,11 @@ public:
     // onChanged() called when account state changes (e.g. signin created file)
     bool init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged = nullptr);
 };
+class SettingsPanel : public AccountPanel {
+    public:
+        SettingsPanel(SDL_Renderer* renderer = nullptr);
+        ~SettingsPanel() = default;
+    
+        // initialize settings panel UI
+        bool init(User* user, int winW, int winH, std::function<void()> onChanged = nullptr);
+    };

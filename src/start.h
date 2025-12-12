@@ -37,7 +37,8 @@ private:
     User user; // default filepath "users.bin"
     std::unique_ptr<AccountPanel> accountPanel;
     bool pendingShowMainButtons = false;
-
+    std::unique_ptr<SettingsPanel> settingsPanel;
+    bool settingsVisible = false;
     bool isRunning = false;
     int winW = 1920;
     int winH = 991;

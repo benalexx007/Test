@@ -319,7 +319,7 @@ bool IngamePanel::initForStage(const std::string& stage, Game* owner,
     Button* settingsBtn = addButton(0, ySettings, widthBtn, heightBtn, "SETTINGS", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (settingsBtn) {
         settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
-        if (owner) settingsBtn->setCallback([owner]() { settings(owner); });
+        if (owner) settingsBtn->setCallback([owner]() { owner->toggleSettings(); });
     }
     return true;
 }
@@ -441,4 +441,11 @@ bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::f
 
     return true;
 }
-
+SettingsPanel::SettingsPanel(SDL_Renderer* renderer) : AccountPanel(renderer) {}
+bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> onChanged)
+{
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
+    // Tạm thời không thêm text/button, chỉ hiển thị background
+    return true;
+}

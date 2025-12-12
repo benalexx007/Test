@@ -30,12 +30,13 @@ public:
     Mummy* mummy = nullptr;
     // in-game UI panel on the right side
     IngamePanel* ingamePanel = nullptr;
-    Panel* settingsPanel = nullptr;
-
+    SettingsPanel* settingsPanel = nullptr;
+    bool settingsVisible = false;
     void init(const std::string& stage);
     void handleEvents();
     void update();
     void render();
     void cleanup();
     void run(const std::string& stage);
+    void toggleSettings();
 };

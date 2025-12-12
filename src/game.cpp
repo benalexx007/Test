@@ -47,9 +47,7 @@ void Game::handleEvents()
             isRunning = false;
 
         // forward input to UI panels so buttons get clicks
-        if (ingamePanel) ingamePanel->handleEvent(e);
-        if (settingsPanel) settingsPanel->handleEvent(e);
-
+        if (settingsVisible && settingsPanel) settingsPanel->render();
         if (e.type == SDL_EVENT_WINDOW_RESIZED)
         {
             int w = e.window.data1;
@@ -113,7 +111,7 @@ void Game::render()
     explorer->render(offsetX, offsetY);
     mummy->render(offsetX, offsetY);
     if (ingamePanel) ingamePanel->render();
-
+    if (settingsPanel) settingsPanel->render();
     SDL_RenderPresent(renderer);
 }
 
@@ -130,7 +128,11 @@ void Game::cleanup()
         delete ingamePanel;
         ingamePanel = nullptr;
     }
-    
+    if (settingsPanel) {
+        settingsPanel->cleanup();
+        delete settingsPanel;
+        settingsPanel = nullptr;
+    }
     delete map;
     map = nullptr;
 
@@ -163,4 +165,22 @@ void Game::run(const std::string &stage)
         SDL_Delay(16); // ~60 FPS
     }
     cleanup();
+}
+void Game::toggleSettings() {
+    if (settingsVisible) {
+        settingsVisible = false;
+        if (settingsPanel) { settingsPanel->cleanup(); delete settingsPanel; settingsPanel = nullptr; }
+        return;
+    }
+    settingsPanel = new SettingsPanel(renderer);
+    const int panelW = 1750, panelH = 900;
+    if (!settingsPanel->init(/*User* */ nullptr, panelW, panelH, nullptr)) {
+        delete settingsPanel;
+        settingsPanel = nullptr;
+        return;
+    }
+    int px = (winW - panelW) / 2;
+    int py = (winH - panelH) / 2;
+    settingsPanel->setPosition(px, py);
+    settingsVisible = true;
 }
