@@ -4,6 +4,7 @@
 #include "../game.h"
 #include "textbox.h"
 #include "../audio.h"
+#include "../start.h"
 extern Audio* g_audioInstance;
 Panel::Panel(SDL_Renderer* renderer) : renderer(renderer) {}
 Panel::~Panel() { cleanup(); }

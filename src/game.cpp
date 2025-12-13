@@ -1,7 +1,7 @@
 #include "game.h"
 #include <cmath>
 #include "audio.h"
-
+#include "start.h"
 // Khai báo global audio instance
 extern Audio* g_audioInstance;
 
@@ -196,7 +196,43 @@ void Game::cleanup()
     isRunning = false;
 
 }
+void Game::cleanupForStart()
+{
+    if (background) {
+        background->cleanup();
+        delete background;
+        background = nullptr;
+    }
 
+    if (ingamePanel) {
+        ingamePanel->cleanup();
+        delete ingamePanel;
+        ingamePanel = nullptr;
+    }
+    if (settingsPanel) {
+        settingsPanel->cleanup();
+        delete settingsPanel;
+        settingsPanel = nullptr;
+    }
+    delete map;
+    map = nullptr;
+
+    delete explorer;
+    explorer = nullptr;
+
+    delete mummy;
+    mummy = nullptr;
+
+    SDL_DestroyRenderer(renderer);
+    renderer = nullptr;
+
+    SDL_DestroyWindow(window);
+    window = nullptr;
+
+    // KHÔNG gọi SDL_Quit(), TTF_Quit(), và không xóa g_audioInstance
+    // vì Start cần dùng chúng
+    isRunning = false;
+}
 void Game::run(const std::string &stage)
 {
     init(stage);
@@ -236,7 +272,9 @@ void Game::toggleSettings() {
         true, // isInGame = true
         [this]() {
             // Callback cho QUIT: thoát game
-            isRunning = false;
+            cleanupForStart();  // Dùng hàm mới thay vì cleanup()
+            Start start;
+            start.run();
         })) {
         delete settingsPanel;
         settingsPanel = nullptr;

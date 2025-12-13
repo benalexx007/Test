@@ -39,6 +39,7 @@ public:
     void update();
     void render();
     void cleanup();
+    void cleanupForStart();
     void run(const std::string& stage);
     void toggleSettings();
 };
