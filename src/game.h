@@ -10,6 +10,7 @@
 #include "entities/mummy.h"
 #include "text.h"
 #include "functions.h"
+#include "user.h"
 
 class Game {
 private:
@@ -24,6 +25,7 @@ private:
     float windowRatio = 1920.0/991.0;
     int offsetX = 0;
     int offsetY = 0;
+    User user; // Thêm User để dùng cho SettingsPanel
 public:
     Map* map = nullptr;
     Explorer* explorer = nullptr;

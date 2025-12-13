@@ -77,7 +77,9 @@ void Start::createMainButtons()
     } else {
         playBtn->setLabelPositionPercent(0.5f, 0.70f);
         playBtn->setCallback([this]() {
-            // TODO: start the game
+            // Chuyển sang game - đóng start screen và mở game
+            isRunning = false;
+            // Game sẽ được khởi tạo sau khi Start cleanup
         });
     }
 
@@ -197,11 +199,11 @@ void Start::cleanup()
     if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
     if (settingsVisible && settingsPanel) { settingsPanel->cleanup(); settingsPanel.reset(); }
     if (bgTexture) { SDL_DestroyTexture(bgTexture); bgTexture = nullptr; }
-    if (g_audioInstance) {
-        g_audioInstance->cleanup();
-        delete g_audioInstance;
-        g_audioInstance = nullptr;
-    }
+    // if (g_audioInstance) {
+    //     g_audioInstance->cleanup();
+    //     delete g_audioInstance;
+    //     g_audioInstance = nullptr;
+    // }
 
     SDL_DestroyRenderer(renderer); renderer = nullptr;
     SDL_DestroyWindow(window); window = nullptr;

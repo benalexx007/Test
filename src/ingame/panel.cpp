@@ -443,7 +443,8 @@ bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::f
     return true;
 }
 SettingsPanel::SettingsPanel(SDL_Renderer* renderer) : AccountPanel(renderer) {}
-bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> onChanged)
+bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> onChanged, 
+                         bool isInGame, std::function<void()> onQuitGame)
 {
     if (!create(renderer, 0, 0, winW, winH)) return false;
     if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
@@ -451,7 +452,7 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
     // Thêm tiêu đề SETTINGS
     const SDL_Color titleCol = {255, 0, 0, 255};
     int titleFontSize = 72;
-    int titleLocalY = static_cast<int>(getHeight() * 0.15f); // Di chuyển lên trên để có chỗ cho các nút
+    int titleLocalY = static_cast<int>(getHeight() * 0.15f);
     addText("assets/font.ttf", titleFontSize, "SETTINGS", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
 
     // Màu và kích thước cho các nút
@@ -462,7 +463,7 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
     const int FontSize = 72;
 
     // Tính toán vị trí bắt đầu cho các nút (dưới title)
-    int startY = titleLocalY + titleFontSize + 60; // Khoảng cách từ title
+    int startY = titleLocalY + titleFontSize + 60;
 
     // Nút CHANGE ACCOUNT
     int yChangeAccount = startY;
@@ -471,13 +472,11 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
         changeAccountBtn->setLabelPositionPercent(0.5f, 0.70f);
         changeAccountBtn->setCallback([user, onChanged]() {
             // TODO: Implement change account functionality
-            // Có thể mở AccountPanel hoặc dialog để đổi tài khoản
             if (onChanged) onChanged();
         });
     }
 
     // Nút MUSIC
-   
     int yMusic = yChangeAccount + BtnH + Padding;
     Button* musicBtn = addButton(0, yMusic, BtnW, BtnH, "MUSIC", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (musicBtn) {
@@ -498,19 +497,41 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
         soundBtn->setLabelPositionPercent(0.5f, 0.70f);
         soundBtn->setCallback([]() {
             // TODO: Implement sound toggle functionality
-            // Có thể dùng audio system để bật/tắt hiệu ứng âm thanh
         });
     }
 
-    // Nút QUIT (đóng panel và quay lại start screen)
-    int yQuit = ySound + BtnH + Padding;
-    Button* quitBtn = addButton(0, yQuit, BtnW, BtnH, "QUIT", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    int currentY = ySound + BtnH + Padding;
+
+    // Nếu đang trong Game, thêm nút RETURN
+    if (isInGame) {
+        // Nút RETURN (đóng panel và tiếp tục chơi)
+        Button* returnBtn = addButton(0, currentY, BtnW, BtnH, "RETURN", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (returnBtn) {
+            returnBtn->setLabelPositionPercent(0.5f, 0.70f);
+            returnBtn->setCallback([onChanged]() {
+                // Đóng panel và tiếp tục chơi
+                if (onChanged) onChanged();
+            });
+        }
+        currentY += BtnH + Padding;
+    }
+
+    // Nút QUIT
+    // Trong Game: thoát game, trong Start: chỉ đóng panel
+    Button* quitBtn = addButton(0, currentY, BtnW, BtnH, "QUIT", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (quitBtn) {
         quitBtn->setLabelPositionPercent(0.5f, 0.70f);
-        quitBtn->setCallback([onChanged]() {
-            // Đóng panel bằng cách gọi callback
-            if (onChanged) onChanged();
-        });
+        if (isInGame && onQuitGame) {
+            // Trong Game: thoát game
+            quitBtn->setCallback([onQuitGame]() {
+                if (onQuitGame) onQuitGame();
+            });
+        } else {
+            // Trong Start: chỉ đóng panel
+            quitBtn->setCallback([onChanged]() {
+                if (onChanged) onChanged();
+            });
+        }
     }
 
     return true;

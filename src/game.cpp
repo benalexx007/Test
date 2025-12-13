@@ -1,9 +1,31 @@
 #include "game.h"
 #include <cmath>
+#include "audio.h"
+
+// Khai báo global audio instance
+extern Audio* g_audioInstance;
 
 void Game::init(const std::string &stage)
 {
     SDL_Init(SDL_INIT_VIDEO);
+    
+    // Khởi tạo audio nếu chưa có (để nhạc nền tiếp tục phát)
+    if (!g_audioInstance) {
+        SDL_Init(SDL_INIT_AUDIO);
+        g_audioInstance = new Audio();
+        if (g_audioInstance->init()) {
+            // Load và phát nhạc nền
+            if (g_audioInstance->loadBackgroundMusic("assets/audio/background_music.wav")) {
+                g_audioInstance->playBackgroundMusic(true); // Loop
+            } else {
+                std::cerr << "Failed to load background music\n";
+            }
+        }
+    }
+    
+    // Khởi tạo User (giống như trong Start)
+    user.read();
+    user.Init();
 
     // initialize SDL_ttf before any Text/TTF usage
     if (TTF_Init() == 0) {
@@ -46,8 +68,22 @@ void Game::handleEvents()
         if (e.type == SDL_EVENT_QUIT)
             isRunning = false;
 
-        // forward input to UI panels so buttons get clicks
-        if (settingsVisible && settingsPanel) settingsPanel->render();
+        // Forward events to settings panel nếu đang mở (ưu tiên cao nhất)
+        bool panelActive = false;
+        if (settingsVisible && settingsPanel) {
+            settingsPanel->handleEvent(e);
+            panelActive = true;
+        }
+
+        // Forward events to ingamePanel (chứa các nút UNDO, REDO, RESET, SETTINGS)
+        // Chỉ forward nếu settings panel không active
+        if (!panelActive && ingamePanel) {
+            ingamePanel->handleEvent(e);
+            // Kiểm tra xem event có được xử lý bởi ingamePanel không
+            // (có thể cần check xem có button nào được click không)
+        }
+
+        // Handle window resize
         if (e.type == SDL_EVENT_WINDOW_RESIZED)
         {
             int w = e.window.data1;
@@ -67,7 +103,8 @@ void Game::handleEvents()
             curH = h;
         }
 
-        if (turn == 0)
+        // Chỉ xử lý input cho explorer nếu không có panel nào active
+        if (!panelActive && turn == 0)
             explorer->handleInput(e, map);
     }
 }
@@ -111,7 +148,8 @@ void Game::render()
     explorer->render(offsetX, offsetY);
     mummy->render(offsetX, offsetY);
     if (ingamePanel) ingamePanel->render();
-    if (settingsPanel) settingsPanel->render();
+    // Render settings panel nếu đang visible (giống như trong Start)
+    if (settingsVisible && settingsPanel) settingsPanel->render();
     SDL_RenderPresent(renderer);
 }
 
@@ -150,8 +188,13 @@ void Game::cleanup()
 
     SDL_Quit();
     TTF_Quit();
-
+    if (g_audioInstance) {
+        g_audioInstance->cleanup();
+        delete g_audioInstance;
+        g_audioInstance = nullptr;
+    }
     isRunning = false;
+
 }
 
 void Game::run(const std::string &stage)
@@ -166,15 +209,35 @@ void Game::run(const std::string &stage)
     }
     cleanup();
 }
+
 void Game::toggleSettings() {
     if (settingsVisible) {
         settingsVisible = false;
-        if (settingsPanel) { settingsPanel->cleanup(); delete settingsPanel; settingsPanel = nullptr; }
+        if (settingsPanel) { 
+            settingsPanel->cleanup(); 
+            delete settingsPanel; 
+            settingsPanel = nullptr; 
+        }
         return;
     }
     settingsPanel = new SettingsPanel(renderer);
     const int panelW = 1750, panelH = 900;
-    if (!settingsPanel->init(/*User* */ nullptr, panelW, panelH, nullptr)) {
+    // Truyền isInGame = true và callback để thoát game
+    if (!settingsPanel->init(&user, panelW, panelH, 
+        [this]() {
+            // Callback cho RETURN: đóng panel và tiếp tục chơi
+            settingsVisible = false;
+            if (settingsPanel) { 
+                settingsPanel->cleanup(); 
+                delete settingsPanel; 
+                settingsPanel = nullptr; 
+            }
+        },
+        true, // isInGame = true
+        [this]() {
+            // Callback cho QUIT: thoát game
+            isRunning = false;
+        })) {
         delete settingsPanel;
         settingsPanel = nullptr;
         return;

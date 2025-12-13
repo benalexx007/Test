@@ -120,5 +120,8 @@ class SettingsPanel : public AccountPanel {
         ~SettingsPanel() = default;
     
         // initialize settings panel UI
-        bool init(User* user, int winW, int winH, std::function<void()> onChanged = nullptr);
+        // isInGame: true nếu đang trong Game, false nếu đang trong Start screen
+        // onQuitGame: callback để thoát game (chỉ dùng khi isInGame = true)
+        bool init(User* user, int winW, int winH, std::function<void()> onChanged = nullptr, 
+                  bool isInGame = false, std::function<void()> onQuitGame = nullptr);
     };
