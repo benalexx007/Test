@@ -85,7 +85,12 @@ void Start::createMainButtons()
             }
             settingsPanel = std::make_unique<SettingsPanel>(renderer);
             const int panelW = 1750, panelH = 900;
-            if (!settingsPanel->init(&user, panelW, panelH, nullptr)) { // hoặc nullptr nếu không cần user
+            // Truyền callback để đóng panel từ bên trong SettingsPanel
+            if (!settingsPanel->init(&user, panelW, panelH, [this]() {
+                // Callback này sẽ được gọi khi nhấn nút QUIT trong SettingsPanel
+                settingsVisible = false;
+                if (settingsPanel) { settingsPanel->cleanup(); settingsPanel.reset(); }
+            })) {
                 settingsPanel.reset();
                 return;
             }
