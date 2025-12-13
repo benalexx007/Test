@@ -3,7 +3,8 @@
 #include "../functions.h"
 #include "../game.h"
 #include "textbox.h"
-
+#include "../audio.h"
+extern Audio* g_audioInstance;
 Panel::Panel(SDL_Renderer* renderer) : renderer(renderer) {}
 Panel::~Panel() { cleanup(); }
 
@@ -476,13 +477,17 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
     }
 
     // Nút MUSIC
+   
     int yMusic = yChangeAccount + BtnH + Padding;
     Button* musicBtn = addButton(0, yMusic, BtnW, BtnH, "MUSIC", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (musicBtn) {
         musicBtn->setLabelPositionPercent(0.5f, 0.70f);
         musicBtn->setCallback([]() {
-            // TODO: Implement music toggle functionality
-            // Có thể dùng audio system để bật/tắt nhạc nền
+            if (g_audioInstance) {
+                bool currentState = g_audioInstance->isMusicEnabled();
+                g_audioInstance->setMusicEnabled(!currentState);
+                std::cout << "Music " << (!currentState ? "ON" : "OFF") << "\n";
+            }
         });
     }
 
