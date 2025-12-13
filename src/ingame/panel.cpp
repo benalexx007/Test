@@ -273,7 +273,7 @@ bool IngamePanel::initForStage(const std::string& stage, Game* owner,
                                int winW, int mapPxW, int winH, int mapPxH)
 {
     // load background
-    std::string panelPath = "assets/images/panel/ingamePanel" + stage + ".png";
+    std::string panelPath = "assets/images/panel/ingamePanel.png";
     if (!setBackgroundFromFile(panelPath)) return false;
 
     // compute position like 
@@ -533,6 +533,63 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
                 if (onChanged) onChanged();
             });
         }
+    }
+
+    return true;
+}
+VictoryPanel::VictoryPanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool VictoryPanel::init(int winW, int winH, std::function<void()> onNextLevel) {
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/ingamePanel.png")) return false;
+
+    const SDL_Color titleCol = {255, 215, 0, 255}; // Gold color
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
+    
+    // Title: VICTORY
+    int titleFontSize = 100;
+    int titleLocalY = static_cast<int>(getHeight() * 0.3f);
+    addText("assets/font.ttf", titleFontSize, "VICTORY", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Button: NEXT LEVEL
+    const int BtnW = 350;
+    const int BtnH = 85;
+    int btnY = titleLocalY + titleFontSize + 60;
+    Button* nextBtn = addButton(0, btnY, BtnW, BtnH, "NEXT LEVEL", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (nextBtn) {
+        nextBtn->setLabelPositionPercent(0.5f, 0.70f);
+        nextBtn->setCallback([onNextLevel]() {
+            if (onNextLevel) onNextLevel();
+        });
+    }
+
+    return true;
+}
+
+LostPanel::LostPanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool LostPanel::init(int winW, int winH, std::function<void()> onPlayAgain) {
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/ingamePanel.png")) return false;
+
+    const SDL_Color titleCol = {255, 0, 0, 255}; // Red color
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
+    
+    // Title: LOST
+    int titleFontSize = 100;
+    int titleLocalY = static_cast<int>(getHeight() * 0.3f);
+    addText("assets/font.ttf", titleFontSize, "LOST", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Button: PLAY AGAIN
+    const int BtnW = 350;
+    const int BtnH = 85;
+    int btnY = titleLocalY + titleFontSize + 60;
+    Button* playAgainBtn = addButton(0, btnY, BtnW, BtnH, "PLAY AGAIN", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (playAgainBtn) {
+        playAgainBtn->setLabelPositionPercent(0.5f, 0.70f);
+        playAgainBtn->setCallback([onPlayAgain]() {
+            if (onPlayAgain) onPlayAgain();
+        });
     }
 
     return true;

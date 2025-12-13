@@ -3,6 +3,8 @@
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <iostream>
+#include <string>  
+
 #include "ingame/map.h"
 #include "ingame/background.h"
 #include "ingame/panel.h"
@@ -26,6 +28,9 @@ private:
     int offsetX = 0;
     int offsetY = 0;
     User user; // Thêm User để dùng cho SettingsPanel
+    std::string currentStage;  // Thêm dòng này
+    enum class GameState { Playing, Victory, Lost };
+    GameState gameState = GameState::Playing;
 public:
     Map* map = nullptr;
     Explorer* explorer = nullptr;
@@ -33,6 +38,8 @@ public:
     // in-game UI panel on the right side
     IngamePanel* ingamePanel = nullptr;
     SettingsPanel* settingsPanel = nullptr;
+    VictoryPanel* victoryPanel = nullptr;
+    LostPanel* lostPanel = nullptr;
     bool settingsVisible = false;
     void init(const std::string& stage);
     void handleEvents();
@@ -40,6 +47,8 @@ public:
     void render();
     void cleanup();
     void cleanupForStart();
+    void cleanupForRestart();
+
     void run(const std::string& stage);
     void toggleSettings();
 };

@@ -13,12 +13,14 @@ Map::Map(SDL_Renderer* ren, const std::string& stage) : renderer(ren) {
     tex_floor_light = loadTexture("assets/images/grid/lightGrid" + stage + ".png");
     tex_floor_dark  = loadTexture("assets/images/grid/darkGrid" + stage + ".png");
     tex_wall        = loadTexture("assets/images/wall/wall" + stage + ".png");
+    tex_exit        = loadTexture("assets/images/grid/exit1.png");
 }
 
 Map::~Map() {
     SDL_DestroyTexture(tex_floor_light);
     SDL_DestroyTexture(tex_floor_dark);
     SDL_DestroyTexture(tex_wall);
+    SDL_DestroyTexture(tex_exit);
 }
 
 void Map::loadFromFile(const std::string& path) {
@@ -51,9 +53,11 @@ void Map::render(int offsetX, int offsetY) {
                 SDL_RenderTexture(renderer, tex_floor_light, NULL, &rect);
             else
                 SDL_RenderTexture(renderer, tex_floor_dark, NULL, &rect);
-
+            
             if (grid[r][c] == 1)
                 SDL_RenderTexture(renderer, tex_wall, NULL, &rect);
+            if (grid[r][c] == 4)
+                SDL_RenderTexture(renderer, tex_exit, NULL, &rect);
         }
     }
 }
@@ -67,7 +71,51 @@ bool Map::isWall(int x, int y) const {
 int Map::getCols() const {
     return grid.empty() ? 0 : (int)grid[0].size();
 }
+bool Map::isExit(int x, int y) const {
+    if (y < 0 || y >= (int)grid.size()) return false;
+    if (x < 0 || x >= (int)grid[y].size()) return false;
+    return grid[y][x] == 4;
+}
 
+void Map::getExitPosition(int& exitX, int& exitY) const {
+    exitX = -1;
+    exitY = -1;
+    for (size_t r = 0; r < grid.size(); ++r) {
+        for (size_t c = 0; c < grid[r].size(); ++c) {
+            if (grid[r][c] == 4) {
+                exitX = (int)c;
+                exitY = (int)r;
+                return;
+            }
+        }
+    }
+}
+void Map::getExplorerPosition(int& expX, int& expY) const {
+    expX = -1;
+    expY = -1;
+    for (size_t r = 0; r < grid.size(); ++r) {
+        for (size_t c = 0; c < grid[r].size(); ++c) {
+            if (grid[r][c] == 3) {
+                expX = (int)c;
+                expY = (int)r;
+                return;
+            }
+        }
+    }
+}
+void Map::getMummyPosition(int& mummyX, int& mummyY) const {
+    mummyX = -1;
+    mummyY = -1;
+    for (size_t r = 0; r < grid.size(); ++r) {
+        for (size_t c = 0; c < grid[r].size(); ++c) {
+            if (grid[r][c] == 2) {
+                mummyX = (int)c;
+                mummyY = (int)r;
+                return;
+            }
+        }
+    }
+}
 int Map::getRows() const {
     return (int)grid.size();
 }

@@ -124,4 +124,15 @@ class SettingsPanel : public AccountPanel {
         // onQuitGame: callback để thoát game (chỉ dùng khi isInGame = true)
         bool init(User* user, int winW, int winH, std::function<void()> onChanged = nullptr, 
                   bool isInGame = false, std::function<void()> onQuitGame = nullptr);
+};
+class VictoryPanel : public Panel {
+    public:
+        VictoryPanel(SDL_Renderer* renderer = nullptr);
+        bool init(int winW, int winH, std::function<void()> onNextLevel);
+    };
+    
+class LostPanel : public Panel {
+    public:
+        LostPanel(SDL_Renderer* renderer = nullptr);
+        bool init(int winW, int winH, std::function<void()> onPlayAgain);
     };
