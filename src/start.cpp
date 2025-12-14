@@ -11,6 +11,12 @@ void Start::init()
     SDL_Init(SDL_INIT_VIDEO);
     // Khởi tạo audio
     SDL_Init(SDL_INIT_AUDIO);
+        // Nếu đã có audio instance, cleanup nó trước
+        if (g_audioInstance) {
+            g_audioInstance->cleanup();  // Bỏ dòng stopBackgroundMusic()
+            delete g_audioInstance;
+            g_audioInstance = nullptr;
+        }
 g_audioInstance = new Audio();
 if (g_audioInstance->init()) {
     // Load và phát nhạc nền

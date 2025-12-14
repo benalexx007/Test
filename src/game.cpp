@@ -304,9 +304,12 @@ void Game::cleanupForStart()
 
     SDL_DestroyWindow(window);
     window = nullptr;
-
-    // KHÔNG gọi SDL_Quit(), TTF_Quit(), và không xóa g_audioInstance
-    // vì Start cần dùng chúng
+        // Stop và cleanup audio để Start có thể load lại nhạc mới
+        if (g_audioInstance) {
+            g_audioInstance->cleanup();  // Bỏ dòng stopBackgroundMusic()
+            delete g_audioInstance;
+            g_audioInstance = nullptr;
+        }
     isRunning = false;
 }
 void Game::cleanupForRestart()
