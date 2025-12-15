@@ -4,6 +4,8 @@
 #include "ingame/panel.h"
 #include "stages.h"
 #include "game.h"
+#include "audio.h"
+Audio* g_audioInstance = nullptr;
 
 Start::Start() {}
 Start::~Start() { cleanup(); }
@@ -11,6 +13,25 @@ Start::~Start() { cleanup(); }
 void Start::init()
 {
     SDL_Init(SDL_INIT_VIDEO);
+
+    SDL_Init(SDL_INIT_AUDIO);
+        // Nếu đã có audio instance, cleanup nó trước
+        if (g_audioInstance) {
+            g_audioInstance->cleanup();  // Bỏ dòng stopBackgroundMusic()
+            delete g_audioInstance;
+            g_audioInstance = nullptr;
+        }
+    g_audioInstance = new Audio();
+    if (g_audioInstance->init()) {
+        // Load và phát nhạc nền
+        // Lưu ý: Convert MP3 sang WAV trước, hoặc dùng decoder
+        if (g_audioInstance->loadBackgroundMusic("assets/audio/background_music.wav")) {
+            g_audioInstance->playBackgroundMusic(true); // Loop
+        } else {
+            std::cerr << "Failed to load background music\n";
+        }
+    }
+    
     TTF_Init();
 
     window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
@@ -89,8 +110,27 @@ void Start::createMainButtons()
         std::cerr << "Start::createMainButtons - failed to create Settings button\n";
     } else {
         settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
-        settingsBtn->setCallback([]() {
-            // TODO: open settings window
+        settingsBtn->setCallback([this]() {
+            if (settingsVisible) {
+                settingsVisible = false;
+                if (settingsPanel) { settingsPanel->cleanup(); settingsPanel.reset(); }
+                return;
+            }
+            settingsPanel = std::make_unique<SettingsPanel>(renderer);
+            const int panelW = 1750, panelH = 900;
+            // Truyền callback để đóng panel từ bên trong SettingsPanel
+            if (!settingsPanel->init(&user, panelW, panelH, [this]() {
+                // Callback này sẽ được gọi khi nhấn nút QUIT trong SettingsPanel
+                settingsVisible = false;
+                if (settingsPanel) { settingsPanel->cleanup(); settingsPanel.reset(); }
+            })) {
+                settingsPanel.reset();
+                return;
+            }
+            int px = (winW - panelW) / 2;
+            int py = (winH - panelH) / 2;
+            settingsPanel->setPosition(px, py);
+            settingsVisible = true;
         });
     }
 }
@@ -106,8 +146,12 @@ void Start::handleEvents()
         }
         // forward to account panel first (if visible, it consumes events inside the panel)
         bool panelActive = false;
-        if (accountPanel) {
+        if (!panelActive && accountPanel) {
             accountPanel->handleEvent(e);
+            panelActive = true;
+        }
+        if (!panelActive && settingsVisible && settingsPanel) {
+            settingsPanel->handleEvent(e);
             panelActive = true;
         }
 
@@ -208,7 +252,8 @@ void Start::render()
     // render stages view over background if present
     if (stagesView) stagesView->render();
 
-    // render account panel over other UI if present
+    // render panels over other UI if present
+    if (settingsVisible && settingsPanel) settingsPanel->render();
     if (accountPanel) accountPanel->render();
 
     SDL_RenderPresent(renderer);
@@ -218,11 +263,16 @@ void Start::cleanup()
 {
     if (playBtn) { playBtn->cleanup(); playBtn.reset(); }
     if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
-
+    if (settingsVisible && settingsPanel) { settingsPanel->cleanup(); settingsPanel.reset(); }
     if (accountPanel) { accountPanel->cleanup(); accountPanel.reset(); }
 
     if (bgTexture) { SDL_DestroyTexture(bgTexture); bgTexture = nullptr; }
-
+    
+    if (g_audioInstance) {
+        g_audioInstance->cleanup();
+        delete g_audioInstance;
+        g_audioInstance = nullptr;
+    }
 
     SDL_DestroyRenderer(renderer); renderer = nullptr;
     SDL_DestroyWindow(window); window = nullptr;

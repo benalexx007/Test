@@ -3,6 +3,9 @@
 #include "../functions.h"
 #include "../game.h"
 #include "textbox.h"
+#include "../audio.h"
+#include "../start.h"
+extern Audio* g_audioInstance;
 
 Panel::Panel(SDL_Renderer* renderer) : renderer(renderer) {}
 Panel::~Panel() { cleanup(); }
@@ -319,7 +322,7 @@ bool IngamePanel::initForStage(Game* owner,
     Button* settingsBtn = addButton(0, ySettings, widthBtn, heightBtn, "SETTINGS", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (settingsBtn) {
         settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
-        if (owner) settingsBtn->setCallback([owner]() { settings(owner); });
+        if (owner) settingsBtn->setCallback([owner]() { owner->toggleSettings(); });
     }
     return true;
 }
@@ -347,7 +350,7 @@ bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::f
         // Title: start at panel Y + 35% of panel height
         // Make title font ~20% of panel height (clamped)
         int titleFontSize = 72;
-        int titleLocalY = static_cast<int>(getHeight() * 0.35f);
+        int titleLocalY = static_cast<int>(getHeight() * 0.30f);
         addText("assets/font.ttf", titleFontSize, "CREATE AN ACCOUNT", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
 
         // Cursor starts below the title (title height + padding)
@@ -442,3 +445,159 @@ bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::f
     return true;
 }
 
+SettingsPanel::SettingsPanel(SDL_Renderer* renderer) : AccountPanel(renderer) {}
+bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> onChanged, 
+                         bool isInGame, std::function<void()> onQuitGame)
+{
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
+
+    // Thêm tiêu đề SETTINGS
+    const SDL_Color titleCol = {255, 0, 0, 255};
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.30f);
+    addText("assets/font.ttf", titleFontSize, "SETTINGS", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Màu và kích thước cho các nút
+    const SDL_Color btnCol = { 0xf9, 0xf2, 0x6a, 0xFF };
+    const int BtnW = 350;
+    const int BtnH = 85;
+    const int Padding = 16;
+    const int FontSize = 72;
+
+    // Tính toán vị trí bắt đầu cho các nút (dưới title)
+    int startY = titleLocalY + titleFontSize + 30;
+
+    // Nút CHANGE ACCOUNT
+    int yChangeAccount = startY;
+    Button* changeAccountBtn = addButton(0, yChangeAccount, BtnW, BtnH, "ACCOUNT", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (changeAccountBtn) {
+        changeAccountBtn->setLabelPositionPercent(0.5f, 0.70f);
+        changeAccountBtn->setCallback([user, onChanged]() {
+            // TODO: Implement change account functionality
+            if (onChanged) onChanged();
+        });
+    }
+
+    // Nút MUSIC
+    int yMusic = yChangeAccount + BtnH + Padding;
+    Button* musicBtn = addButton(0, yMusic, BtnW, BtnH, "MUSIC", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (musicBtn) {
+        musicBtn->setLabelPositionPercent(0.5f, 0.70f);
+        musicBtn->setCallback([]() {
+            if (g_audioInstance) {
+                bool currentState = g_audioInstance->isMusicEnabled();
+                g_audioInstance->setMusicEnabled(!currentState);
+                std::cout << "Music " << (!currentState ? "ON" : "OFF") << "\n";
+            }
+        });
+    }
+
+    // Nút SOUND
+    int ySound = yMusic + BtnH + Padding;
+    Button* soundBtn = addButton(0, ySound, BtnW, BtnH, "SOUND", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (soundBtn) {
+        soundBtn->setLabelPositionPercent(0.5f, 0.70f);
+        soundBtn->setCallback([]() {
+            // TODO: Implement sound toggle functionality
+        });
+    }
+
+    int currentY = ySound + BtnH + Padding;
+    int curBtnW = BtnW;
+    int currentX = (this -> getWidth() - curBtnW)/2;
+    int curFontSize=72;
+
+    // Nếu đang trong Game, thêm nút RETURN
+    if (isInGame) {
+        // Nút RETURN (đóng panel và tiếp tục chơi)
+        Button* returnBtn = addButton(currentX, currentY, ((curBtnW -= 16) /= 2), BtnH, "RETURN", (curFontSize/=2), btnCol, "assets/font.ttf", HAlign::Left, VAlign::Top);
+        if (returnBtn) {
+            std::cout<<curBtnW<<'\n';
+            returnBtn->setLabelPositionPercent(0.5f, 0.70f);
+            returnBtn->setCallback([onChanged]() {
+                // Đóng panel và tiếp tục chơi
+                if (onChanged) onChanged();
+            });
+        }
+        currentX += curBtnW + 16;
+        std::cout<<currentX<<'\n';
+    }
+
+    // Nút QUIT
+    // Trong Game: thoát game, trong Start: chỉ đóng panel
+    Button* quitBtn = addButton(currentX, currentY, curBtnW, BtnH, "QUIT", curFontSize, btnCol, "assets/font.ttf", HAlign::Left, VAlign::Top);
+    if (quitBtn) {
+        quitBtn->setLabelPositionPercent(0.5f, 0.70f);
+        if (isInGame && onQuitGame) {
+            // Trong Game: thoát game
+            quitBtn->setCallback([onQuitGame]() {
+                if (onQuitGame) onQuitGame();
+            });
+        } else {
+            // Trong Start: chỉ đóng panel
+            quitBtn->setCallback([onChanged]() {
+                if (onChanged) onChanged();
+            });
+        }
+    }
+
+    return true;
+}
+VictoryPanel::VictoryPanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool VictoryPanel::init(int winW, int winH, std::function<void()> onNextLevel) {
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/ingamePanel.png")) return false;
+
+    const SDL_Color titleCol = {255, 215, 0, 255}; // Gold color
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
+    
+    // Title: VICTORY
+    int titleFontSize = 100;
+    int titleLocalY = static_cast<int>(getHeight() * 0.3f);
+    addText("assets/font.ttf", titleFontSize, "VICTORY", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Button: NEXT LEVEL
+    const int BtnW = 350;
+    const int BtnH = 85;
+    int btnY = titleLocalY + titleFontSize + 60;
+    Button* nextBtn = addButton(0, btnY, BtnW, BtnH, "NEXT LEVEL", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (nextBtn) {
+        nextBtn->setLabelPositionPercent(0.5f, 0.70f);
+        nextBtn->setCallback([onNextLevel]() {
+            if (onNextLevel) onNextLevel();
+        });
+    }
+
+    return true;
+}
+
+LostPanel::LostPanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool LostPanel::init(int winW, int winH, std::function<void()> onPlayAgain) {
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/ingamePanel.png")) return false;
+
+    const SDL_Color titleCol = {255, 0, 0, 255}; // Red color
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
+    
+    // Title: LOST
+    int titleFontSize = 100;
+    int titleLocalY = static_cast<int>(getHeight() * 0.3f);
+    addText("assets/font.ttf", titleFontSize, "LOST", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Button: PLAY AGAIN
+    const int BtnW = 350;
+    const int BtnH = 85;
+    int btnY = titleLocalY + titleFontSize + 60;
+    Button* playAgainBtn = addButton(0, btnY, BtnW, BtnH, "PLAY AGAIN", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (playAgainBtn) {
+        playAgainBtn->setLabelPositionPercent(0.5f, 0.70f);
+        playAgainBtn->setCallback([onPlayAgain]() {
+            if (onPlayAgain) onPlayAgain();
+        });
+    }
+
+    return true;
+}

@@ -118,6 +118,25 @@ public:
     bool init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged = nullptr);
 };
 
-class settingsPanel :  public Panel {
+class SettingsPanel : public AccountPanel {
+    public:
+        SettingsPanel(SDL_Renderer* renderer = nullptr);
+        ~SettingsPanel() = default;
     
+        // initialize settings panel UI
+        // isInGame: true nếu đang trong Game, false nếu đang trong Start screen
+        // onQuitGame: callback để thoát game (chỉ dùng khi isInGame = true)
+        bool init(User* user, int winW, int winH, std::function<void()> onChanged = nullptr, 
+                  bool isInGame = false, std::function<void()> onQuitGame = nullptr);
 };
+class VictoryPanel : public Panel {
+    public:
+        VictoryPanel(SDL_Renderer* renderer = nullptr);
+        bool init(int winW, int winH, std::function<void()> onNextLevel);
+    };
+    
+class LostPanel : public Panel {
+    public:
+        LostPanel(SDL_Renderer* renderer = nullptr);
+        bool init(int winW, int winH, std::function<void()> onPlayAgain);
+    };

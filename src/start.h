@@ -40,6 +40,8 @@ private:
     User user; // default filepath "users.bin"
     std::unique_ptr<AccountPanel> accountPanel;
     bool pendingShowMainButtons = false;
+    std::unique_ptr<SettingsPanel> settingsPanel;
+    bool settingsVisible = false;
 
     // stages view
     std::unique_ptr<Stages> stagesView;

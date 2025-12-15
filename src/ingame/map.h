@@ -10,6 +10,8 @@ private:
     SDL_Texture* tex_floor_light;
     SDL_Texture* tex_floor_dark;
     SDL_Texture* tex_wall;
+    SDL_Texture* tex_exit;
+    
     std::vector<std::vector<int>> grid;
     int TILE_SIZE = 64;
 
@@ -25,4 +27,8 @@ public:
     int getCols() const;
     int getRows() const;
     int getTileSize() const { return TILE_SIZE; }
+    bool isExit(int x, int y) const;
+    void getExitPosition(int& exitX, int& exitY) const;
+    void getExplorerPosition(int& expX, int& expY) const;
+    void getMummyPosition(int& mummyX, int& mummyY) const;
 };

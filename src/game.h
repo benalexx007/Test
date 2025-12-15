@@ -3,6 +3,7 @@
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <iostream>
+#include <cstring>  
 #include "ingame/map.h"
 #include "ingame/background.h"
 #include "ingame/panel.h"
@@ -10,6 +11,7 @@
 #include "entities/mummy.h"
 #include "text.h"
 #include "functions.h"
+#include "user.h"
 
 class Game {
 private:
@@ -24,18 +26,27 @@ private:
     float windowRatio = 1920.0/991.0;
     int offsetX = 0;
     int offsetY = 0;
+    User user;
+    char currentStage;
+    enum class GameState { Playing, Victory, Lost };
+    GameState gameState = GameState::Playing;
 public:
     Map* map = nullptr;
     Explorer* explorer = nullptr;
     Mummy* mummy = nullptr;
     // in-game UI panel on the right side
     IngamePanel* ingamePanel = nullptr;
-    Panel* settingsPanel = nullptr;
+    SettingsPanel* settingsPanel = nullptr;
+    VictoryPanel* victoryPanel = nullptr;
+    LostPanel* lostPanel = nullptr;
+    bool settingsVisible = false;
 
     void init(const char stage);
     void handleEvents();
     void update();
     void render();
     void cleanup();
+    void cleanupForRestart();
     void run(const char stage);
+    void toggleSettings();
 };

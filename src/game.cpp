@@ -1,18 +1,50 @@
 #include "game.h"
+#include "audio.h"
+#include "start.h"
 #include <cmath>
+
+// Khai báo global audio instance
+extern Audio* g_audioInstance;
 
 void Game::init(char stage)
 {
-    SDL_Init(SDL_INIT_VIDEO);
+    currentStage = stage;
+    gameState = GameState::Playing;
+    turn = 0;  // Thêm dòng này
+    mummyStepsLeft = 0;  // Thêm dòng này
+    settingsVisible = false;  // Thêm dòng này
+    
+    // Chỉ init SDL nếu chưa có window
+    if (!window) {
+        SDL_Init(SDL_INIT_VIDEO);
+        
+        // Khởi tạo audio nếu chưa có (để nhạc nền tiếp tục phát)
+        if (!g_audioInstance) {
+            SDL_Init(SDL_INIT_AUDIO);
+            g_audioInstance = new Audio();
+            if (g_audioInstance->init()) {
+                // Load và phát nhạc nền
+                if (g_audioInstance->loadBackgroundMusic("assets/audio/background_music.wav")) {
+                    g_audioInstance->playBackgroundMusic(true); // Loop
+                } else {
+                    std::cerr << "Failed to load background music\n";
+                }
+            }
+        }
+        
+        // initialize SDL_ttf before any Text/TTF usage
+        if (TTF_Init() == 0) {
+            std::cerr << "TTF_Init failed: " << SDL_GetError() << "\n";
+        }
 
-    // initialize SDL_ttf before any Text/TTF usage
-    if (TTF_Init() == 0) {
-        std::cerr << "TTF_Init failed: " << SDL_GetError() << "\n";
+        window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
+        renderer = SDL_CreateRenderer(window, NULL);
+        SDL_MaximizeWindow(window);
     }
-
-    window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
-    renderer = SDL_CreateRenderer(window, NULL);
-    SDL_MaximizeWindow(window);
+    
+    // Khởi tạo User (giống như trong Start)
+    user.read();
+    user.Init();
 
     // background manager
     background = new Background(renderer);
@@ -30,8 +62,13 @@ void Game::init(char stage)
     ingamePanel->create(renderer, 0, 0, 0, 0);
     ingamePanel->initForStage(this, winW, mapPxW, winH, mapPxH);
 
-    explorer = new Explorer(renderer, 1, 1, tileSize, stage);
-    mummy = new Mummy(renderer, 5, 5, tileSize, stage);
+    int expX = 1, expY = 1;  // default fallback
+    int mummyX = 5, mummyY = 5;  // default fallback
+    map->getExplorerPosition(expX, expY);
+    map->getMummyPosition(mummyX, mummyY);
+    
+    explorer = new Explorer(renderer, expX, expY, tileSize, stage);
+    mummy = new Mummy(renderer, mummyX, mummyY, tileSize, stage);
 
     isRunning = true;
 }
@@ -47,8 +84,22 @@ void Game::handleEvents()
             isRunning = false;
 
         // forward input to UI panels so buttons get clicks
-        if (ingamePanel) ingamePanel->handleEvent(e);
-        if (settingsPanel) settingsPanel->handleEvent(e);
+        bool panelActive = false;
+        if (settingsVisible && settingsPanel) {
+            settingsPanel->handleEvent(e);
+            panelActive = true;
+        }
+        if (gameState == GameState::Victory && victoryPanel) {
+            victoryPanel->handleEvent(e);
+            panelActive = true;
+        }
+        if (gameState == GameState::Lost && lostPanel) {
+            lostPanel->handleEvent(e);
+            panelActive = true;
+        }
+        if (!panelActive && ingamePanel) {
+            ingamePanel->handleEvent(e);
+        }
 
         if (e.type == SDL_EVENT_WINDOW_RESIZED)
         {
@@ -69,7 +120,7 @@ void Game::handleEvents()
             curH = h;
         }
 
-        if (turn == 0)
+        if (!panelActive && turn == 0)
             explorer->handleInput(e, map);
     }
 }
@@ -102,6 +153,47 @@ void Game::update()
             turn = 0;
         }
     }
+    if (gameState == GameState::Playing && explorer && map) {
+        if (map->isExit(explorer->getX(), explorer->getY())) {
+            gameState = GameState::Victory;
+            // Tạo victory panel
+            if (!victoryPanel) {
+                victoryPanel = new VictoryPanel(renderer);
+                if (victoryPanel->init(winW, winH, [this]() {
+                    // Next level callback - restart game với stage mới
+                    char nextStage = currentStage + 1;
+                    std::cerr << "Loading next level: " << nextStage << "\n";  // Debug
+                    cleanupForRestart();
+                    init(nextStage);
+                    std::cerr << "Next level loaded\n";  // Debug
+                })) {
+                    int px = (winW - victoryPanel->getWidth()) / 2;
+                    int py = (winH - victoryPanel->getHeight()) / 2;
+                    victoryPanel->setPosition(px, py);
+                }
+            }
+        }
+    }
+
+    // Check collision: Mummy với Explorer (Lost)
+    if (gameState == GameState::Playing && explorer && mummy) {
+        if (explorer->getX() == mummy->getX() && explorer->getY() == mummy->getY()) {
+            gameState = GameState::Lost;
+            // Tạo lost panel
+            if (!lostPanel) {
+                lostPanel = new LostPanel(renderer);
+                if (lostPanel->init(winW, winH, [this]() {
+                    // Play again callback - restart current level
+                    cleanupForRestart();
+                    init(currentStage);
+                })) {
+                    int px = (winW - lostPanel->getWidth()) / 2;
+                    int py = (winH - lostPanel->getHeight()) / 2;
+                    lostPanel->setPosition(px, py);
+                }
+            }
+        }
+    }
 }
 
 void Game::render()
@@ -113,6 +205,9 @@ void Game::render()
     explorer->render(offsetX, offsetY);
     mummy->render(offsetX, offsetY);
     if (ingamePanel) ingamePanel->render();
+    if (settingsVisible && settingsPanel) settingsPanel->render();
+    if (gameState == GameState::Victory && victoryPanel) victoryPanel->render();
+    if (gameState == GameState::Lost && lostPanel) lostPanel->render();
 
     SDL_RenderPresent(renderer);
 }
@@ -130,6 +225,26 @@ void Game::cleanup()
         delete ingamePanel;
         ingamePanel = nullptr;
     }
+    if (settingsPanel) {
+        settingsPanel->cleanup();
+        delete settingsPanel;
+        settingsPanel = nullptr;
+    }
+    if (victoryPanel) {
+        victoryPanel->cleanup();
+        delete victoryPanel;
+        victoryPanel = nullptr;
+    }
+    if (lostPanel) {
+        lostPanel->cleanup();
+        delete lostPanel;
+        lostPanel = nullptr;
+    }
+    if (g_audioInstance) {
+        g_audioInstance->cleanup();
+        delete g_audioInstance;
+        g_audioInstance = nullptr;
+    }
     
     delete map;
     map = nullptr;
@@ -146,12 +261,51 @@ void Game::cleanup()
     SDL_DestroyWindow(window);
     window = nullptr;
 
-    SDL_Quit();
-    TTF_Quit();
-
     isRunning = false;
 }
-
+void Game::cleanupForRestart()
+{
+    if (background) {
+        background->cleanup();
+        delete background;
+        background = nullptr;
+    }
+    if (ingamePanel) {
+        ingamePanel->cleanup();
+        delete ingamePanel;
+        ingamePanel = nullptr;
+    }
+    if (settingsPanel) {
+        settingsPanel->cleanup();
+        delete settingsPanel;
+        settingsPanel = nullptr;
+    }
+    if (victoryPanel) {
+        victoryPanel->cleanup();
+        delete victoryPanel;
+        victoryPanel = nullptr;
+    }
+    if (lostPanel) {
+        lostPanel->cleanup();
+        delete lostPanel;
+        lostPanel = nullptr;
+    }
+    delete map;
+    map = nullptr;
+    delete explorer;
+    explorer = nullptr;
+    delete mummy;
+    mummy = nullptr;
+    
+    // Reset game state
+    gameState = GameState::Playing;  // Thêm dòng này
+    turn = 0;  // Thêm dòng này
+    mummyStepsLeft = 0;  // Thêm dòng này
+    settingsVisible = false;  // Thêm dòng này
+    
+    // KHÔNG destroy window và renderer - giữ lại để restart
+    // KHÔNG gọi SDL_Quit(), TTF_Quit(), và không xóa g_audioInstance
+}
 void Game::run(char stage)
 {
     init(stage);
@@ -163,4 +317,43 @@ void Game::run(char stage)
         SDL_Delay(16); // ~60 FPS
     }
     cleanup();
+}
+
+void Game::toggleSettings() {
+    if (settingsVisible) {
+        settingsVisible = false;
+        if (settingsPanel) { 
+            settingsPanel->cleanup(); 
+            delete settingsPanel; 
+            settingsPanel = nullptr; 
+        }
+        return;
+    }
+    settingsPanel = new SettingsPanel(renderer);
+    const int panelW = 1750, panelH = 900;
+    // Truyền isInGame = true và callback để thoát game
+    if (!settingsPanel->init(&user, panelW, panelH, 
+        [this]() {
+            // Callback cho RETURN: đóng panel và tiếp tục chơi
+            settingsVisible = false;
+            if (settingsPanel) { 
+                settingsPanel->cleanup(); 
+                delete settingsPanel; 
+                settingsPanel = nullptr; 
+            }
+        },
+        true, // isInGame = true
+        [this]() {
+            cleanup();
+            Start start;
+            start.run();
+        })) {
+        delete settingsPanel;
+        settingsPanel = nullptr;
+        return;
+    }
+    int px = (winW - panelW) / 2;
+    int py = (winH - panelH) / 2;
+    settingsPanel->setPosition(px, py);
+    settingsVisible = true;
 }
