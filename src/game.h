@@ -32,10 +32,10 @@ public:
     IngamePanel* ingamePanel = nullptr;
     Panel* settingsPanel = nullptr;
 
-    void init(const std::string& stage);
+    void init(const char stage);
     void handleEvents();
     void update();
     void render();
     void cleanup();
-    void run(const std::string& stage);
+    void run(const char stage);
 };

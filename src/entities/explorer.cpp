@@ -1,7 +1,7 @@
 #include "explorer.h"
 
-Explorer::Explorer(SDL_Renderer* renderer, int startX, int startY, int tileSize, const std::string& stage)
-    : Character(renderer, "assets/images/explorer/explorer", stage, startX, startY, tileSize) {}
+Explorer::Explorer(SDL_Renderer* renderer, int startX, int startY, int tileSize, char stage)
+    : Character(renderer, "assets/images/explorer/explorer", std::string(1, stage), startX, startY, tileSize) {}
 
 void Explorer::handleInput(const SDL_Event& e, Map* map) {
     if (e.type != SDL_EVENT_KEY_DOWN) return;

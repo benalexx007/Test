@@ -16,7 +16,7 @@ private:
     SDL_Texture* loadTexture(const std::string& path);
 
 public:
-    Map(SDL_Renderer* ren, const std::string& stage);
+    Map(SDL_Renderer* ren, char stage);
     ~Map();
 
     void loadFromFile(const std::string& path);

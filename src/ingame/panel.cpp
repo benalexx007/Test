@@ -267,11 +267,11 @@ int Panel::getHeight() const { return h; }
 
 IngamePanel::IngamePanel(SDL_Renderer* renderer) : Panel(renderer) {}
 
-bool IngamePanel::initForStage(const std::string& stage, Game* owner,
+bool IngamePanel::initForStage(Game* owner,
                                int winW, int mapPxW, int winH, int mapPxH)
 {
     // load background
-    std::string panelPath = "assets/images/panel/ingamePanel" + stage + ".png";
+    std::string panelPath = "assets/images/panel/ingamePanel.png";
     if (!setBackgroundFromFile(panelPath)) return false;
 
     // compute position like 

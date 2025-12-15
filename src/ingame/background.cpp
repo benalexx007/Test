@@ -5,12 +5,12 @@ Background::Background(SDL_Renderer* renderer) : renderer(renderer) {}
 
 Background::~Background() { cleanup(); }
 
-bool Background::load(const std::string& stage)
+bool Background::load(char stage)
 {
     if (!renderer) return false;
     for (int i = 0; i < 3; ++i) {
         char index = '1' + i;
-        std::string path = "assets/images/background/background" + stage + "_" + index + ".png";
+        std::string path = "assets/images/background/background" + std::string(1, stage) + "_" + index + ".png";
         textures[i] = IMG_LoadTexture(renderer, path.c_str());
         if (!textures[i]) {
             std::cerr << "Failed to load background: " << path << " | " << SDL_GetError() << std::endl;

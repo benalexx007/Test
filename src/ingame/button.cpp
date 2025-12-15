@@ -52,6 +52,8 @@ bool Button::create(SDL_Renderer* rend,
 
 int Button::getWidth() const { return rect.w; }
 int Button::getHeight() const { return rect.h; }
+int Button::getX() const { return rect.x; }
+int Button::getY() const { return rect.y; }
 
 void Button::setText(const std::string& text) {
     if (!label) label = std::make_unique<Text>(renderer);
@@ -95,29 +97,48 @@ void Button::updateLabelPosition()
 
 void Button::handleEvent(const SDL_Event& e)
 {
-    // only care about mouse button events now
-    if (e.type != SDL_EVENT_MOUSE_BUTTON_DOWN && e.type != SDL_EVENT_MOUSE_BUTTON_UP) return;
+    if (!renderer) return;
 
-    int mx = e.button.x;
-    int my = e.button.y;
+    // Only care about mouse events
+    if (e.type != SDL_EVENT_MOUSE_BUTTON_DOWN && e.type != SDL_EVENT_MOUSE_BUTTON_UP && e.type != SDL_EVENT_MOUSE_MOTION)
+        return;
+
+    // Normalize mouse coords by renderer scale so logical rect matches physical events
+    float scaleX = 1.0f, scaleY = 1.0f;
+    SDL_GetRenderScale(renderer, &scaleX, &scaleY);
+
+    int mx = 0, my = 0;
+    if (e.type == SDL_EVENT_MOUSE_MOTION) {
+        mx = static_cast<int>(e.motion.x / scaleX);
+        my = static_cast<int>(e.motion.y / scaleY);
+    } else {
+        mx = static_cast<int>(e.button.x / scaleX);
+        my = static_cast<int>(e.button.y / scaleY);
+    }
 
     bool inside = (mx >= rect.x && mx < rect.x + rect.w && my >= rect.y && my < rect.y + rect.h);
-    if (!inside) return;
 
-    // on mouse down, show onClick texture, wait 100ms, then invoke callback
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) {
-        if (texOnClick) {
-            clicked = true;
-            // render immediate visual feedback
-            render();
-            SDL_RenderPresent(renderer);
-            SDL_Delay(100);
-            clicked = false;
-        } else {
-            // still provide delay before callback as requested
-            SDL_Delay(100);
+        clicked = inside;
+        std::cerr << "Button::handleEvent - MOUSE_DOWN inside=" << inside << " rect=("
+                  << rect.x << "," << rect.y << "," << rect.w << "," << rect.h << ")\n";
+    } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_LEFT) {
+        std::cerr << "Button::handleEvent - MOUSE_UP inside=" << inside << " clicked=" << clicked << "\n";
+        if (clicked && inside) {
+            std::cerr << "Button::handleEvent - invoking callback onClick set=" << (onClick ? "yes" : "no") << "\n";
+            // visual feedback then callback
+            if (texOnClick) {
+                clicked = true;
+                render();
+                SDL_RenderPresent(renderer);
+                SDL_Delay(100);
+                clicked = false;
+            } else {
+                SDL_Delay(100);
+            }
+            if (onClick) onClick();
         }
-        if (onClick) onClick();
+        clicked = false;
     }
 }
 

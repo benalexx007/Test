@@ -16,6 +16,9 @@ bool User::write()
         return false;
     }
 
+    // write persisted sign flag first
+    ofs.write(reinterpret_cast<const char*>(&sign), sizeof(sign));
+
     uint64_t count = static_cast<uint64_t>(records.size());
     ofs.write(reinterpret_cast<const char*>(&count), sizeof(count));
     for (const auto& r : records) {
@@ -32,9 +35,14 @@ bool User::read()
     records.clear();
     std::ifstream ifs(path, std::ios::binary);
     if (!ifs.is_open()) {
-        // no file is not an error for read() — caller's Init will handle
+        // no file -> nothing to read
+        sign = 0;
         return false;
     }
+
+    // read persisted sign flag first
+    ifs.read(reinterpret_cast<char*>(&sign), sizeof(sign));
+    if (!ifs) { sign = 0; return false; }
 
     uint64_t count = 0;
     ifs.read(reinterpret_cast<char*>(&count), sizeof(count));
@@ -53,31 +61,38 @@ bool User::read()
 void User::Init()
 {
     if (!read() || records.empty()) {
-        username = std::string(1, '\0');
-        password = std::string(1, '\0');
-        stage = -1;
-        // ensure records vector has at least one slot to store future logout
+        username.clear();
+        password.clear();
+        stage = '0';
+        sign = 0;
         if (records.empty()) records.emplace_back();
         return;
     }
-    username = records.front().username;
-    password = records.front().password;
-    stage = records.front().stage;
+
+    // if sign==1 it means last session explicitly logged out -> do not auto-load credentials
+    if (sign == 1) {
+        username.clear();
+        password.clear();
+        stage = '0';
+    } else {
+        username = records.front().username;
+        password = records.front().password;
+        stage = records.front().stage;
+    }
 }
 
+// login: clear sign (user is now active)
 bool User::login(const std::string& user, const std::string& pass)
 {
-    // ensure we have current list
     read();
 
     for (size_t i = 0; i < records.size(); ++i) {
         if (records[i].username == user && records[i].password == pass) {
-            // assign current and move record to front
             username = records[i].username;
             password = records[i].password;
             stage = records[i].stage;
             if (i != 0) std::swap(records[i], records[0]);
-            // persist order
+            sign = 0;
             write();
             return true;
         }
@@ -88,39 +103,40 @@ bool User::login(const std::string& user, const std::string& pass)
 
 void User::logout()
 {
-    // ensure vector exists, put current user into first slot, persist
     if (records.empty()) records.emplace_back();
     records.front().username = username;
     records.front().password = password;
     records.front().stage = stage;
+    // mark explicit logout and persist so sign survives program exit
+    sign = 1;
     write();
 }
 
+// signin ...
 bool User::signin(const std::string& user, const std::string& pass)
 {
-    // read existing list
     read();
-
-    // create new record
     Record r;
     r.username = user;
     r.password = pass;
-    r.stage = -1;
-
-    // add at end and swap with first, make it current
+    r.stage = '0';
     records.push_back(r);
     if (records.size() > 1) std::swap(records.back(), records.front());
     username = records.front().username;
     password = records.front().password;
     stage = records.front().stage;
+    sign = 0;
     return write();
 }
 
 // accessors
 std::string User::getUsername() const { return username; }
 std::string User::getPassword() const { return password; }
-int User::getStage() const { return stage; }
-void User::setStage(int s) { stage = s; }
+char User::getStage() const { return stage; }
+void User::setStage(char s) { stage = s; }
+
+void User::setSign(bool s) { sign = s ? 1 : 0; }
+bool User::getSign() const { return sign != 0; }
 
 // helpers for string read/write (length + raw bytes)
 bool User::writeString(std::ofstream& ofs, const std::string& s)
@@ -136,11 +152,18 @@ bool User::readString(std::ifstream& ifs, std::string& s)
     uint64_t n = 0;
     ifs.read(reinterpret_cast<char*>(&n), sizeof(n));
     if (!ifs) return false;
+
+    const uint64_t MAX_STRING_LEN = 1 << 20; // 1 MiB max per string
+    if (n > MAX_STRING_LEN) {
+        std::cerr << "User::readString - string length too large: " << n << "\n";
+        return false;
+    }
+
     if (n == 0) {
         s.clear();
         return true;
     }
-    s.assign(n, '\0');
+    s.assign(static_cast<size_t>(n), '\0');
     ifs.read(&s[0], static_cast<std::streamsize>(n));
     return static_cast<bool>(ifs);
 }

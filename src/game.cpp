@@ -1,7 +1,7 @@
 #include "game.h"
 #include <cmath>
 
-void Game::init(const std::string &stage)
+void Game::init(char stage)
 {
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -19,7 +19,7 @@ void Game::init(const std::string &stage)
     background->load(stage);
 
     map = new Map(renderer, stage);
-    map->loadFromFile("assets/maps/level" + stage + ".txt");
+    map->loadFromFile("assets/maps/level" + std::string(1, stage) + ".txt");
     int tileSize = map->getTileSize();
     int mapPxW = tileSize * map->getCols();
     int mapPxH = tileSize * map->getRows();
@@ -28,7 +28,7 @@ void Game::init(const std::string &stage)
 
     ingamePanel = new IngamePanel(renderer);
     ingamePanel->create(renderer, 0, 0, 0, 0);
-    ingamePanel->initForStage(stage, this, winW, mapPxW, winH, mapPxH);
+    ingamePanel->initForStage(this, winW, mapPxW, winH, mapPxH);
 
     explorer = new Explorer(renderer, 1, 1, tileSize, stage);
     mummy = new Mummy(renderer, 5, 5, tileSize, stage);
@@ -152,7 +152,7 @@ void Game::cleanup()
     isRunning = false;
 }
 
-void Game::run(const std::string &stage)
+void Game::run(char stage)
 {
     init(stage);
     while (isRunning)

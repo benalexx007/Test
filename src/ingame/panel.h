@@ -4,11 +4,14 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <functional> // added
+#include <functional>
 #include "button.h"
 #include "../text.h"
 #include "../user.h"
 #include "textbox.h"
+
+class User;
+class Game;
 
 class Panel {
 public:
@@ -101,7 +104,7 @@ class Game;
 class IngamePanel : public Panel {
 public:
     IngamePanel(SDL_Renderer* renderer = nullptr);
-    bool initForStage(const std::string& stage, Game* owner,
+    bool initForStage(Game* owner,
                       int winW, int mapPxW, int winH, int mapPxH);
 };
 
@@ -113,4 +116,8 @@ public:
     // initialize panel UI. hasUserFile == true when users file exists.
     // onChanged() called when account state changes (e.g. signin created file)
     bool init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged = nullptr);
+};
+
+class settingsPanel :  public Panel {
+    
 };

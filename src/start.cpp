@@ -2,6 +2,8 @@
 #include <iostream>
 #include <fstream>
 #include "ingame/panel.h"
+#include "stages.h"
+#include "game.h"
 
 Start::Start() {}
 Start::~Start() { cleanup(); }
@@ -21,6 +23,10 @@ void Start::init()
 
     bool hasFile = user.read();
     user.Init();
+
+    // ensure main buttons exist
+    createMainButtons();
+    std::cerr << "Start::init - createMainButtons called\n";
 
     // createMainButtons moved to member function
     (void)TextColor; // silence unused warning until member method uses it
@@ -62,10 +68,17 @@ void Start::createMainButtons()
     playBtn = std::make_unique<Button>(renderer);
     if (!playBtn->create(renderer, xCenter, yPlay, BtnW, BtnH, "PLAY", 72, TextColor, "assets/font.ttf")) {
         std::cerr << "Start::createMainButtons - failed to create Play button\n";
-    } else {
+    } else { 
         playBtn->setLabelPositionPercent(0.5f, 0.70f);
         playBtn->setCallback([this]() {
-            // TODO: start the game
+            // start sliding buttons out to the left and then open stages view
+            if (buttonsSlidingOut) return;   
+            std::cerr << "Start: PLAY clicked, starting slide\n";
+            // record start positions
+            playBtnStartX = playBtn ? playBtn->getX() : 0;
+            settingsBtnStartX = settingsBtn ? settingsBtn->getX() : 0;
+            slideStartTime = SDL_GetTicks();
+            buttonsSlidingOut = true;
         });
     }
 
@@ -98,7 +111,13 @@ void Start::handleEvents()
             panelActive = true;
         }
 
-        if (!panelActive) {
+        // if stages view present, let it handle input
+        if (!panelActive && stagesView) {
+            stagesView->handleEvent(e);
+            continue;
+        }
+
+        if (!panelActive && !stagesView) {
             if (playBtn) playBtn->handleEvent(e);
             if (settingsBtn) settingsBtn->handleEvent(e);
         }
@@ -144,9 +163,50 @@ void Start::render()
         SDL_RenderTexture(renderer, bgTexture, NULL, &dst);
     }
 
-    // draw buttons
+    // animate sliding out buttons when requested
+    if (buttonsSlidingOut) {
+        Uint32 now = SDL_GetTicks();
+        Uint32 elapsed = now - slideStartTime;
+        float t = elapsed >= slideDurationMs ? 1.0f : (float)elapsed / (float)slideDurationMs;
+        // ease-in-out
+        t = 1.0f - std::pow(1.0f - t, 3);
+        int targetOffset = winW + 200; // move far to left (negative)
+        if (playBtn) {
+            int sx = playBtnStartX;
+            int nx = static_cast<int>(sx - t * (sx + targetOffset));
+            playBtn->setPosition(nx, playBtn->getY());
+        }
+        if (settingsBtn) {
+            int sx = settingsBtnStartX;
+            int nx = static_cast<int>(sx - t * (sx + targetOffset));
+            settingsBtn->setPosition(nx, settingsBtn->getY());
+        }
+        if (t >= 1.0f) {
+            // finished sliding: destroy buttons and open stages view
+            if (playBtn) { playBtn->cleanup(); playBtn.reset(); }
+            if (settingsBtn) { settingsBtn->cleanup(); settingsBtn.reset(); }
+            buttonsSlidingOut = false;
+
+            std::cerr << "Start::render - slide finished, creating Stages view\n";
+            stagesView = std::make_unique<Stages>(renderer);
+            bool ok = stagesView->init(renderer, &user, winW, winH, [this](char stageChar) {
+                // start game with selected stage char: cleanup UI first
+                this->cleanup(); // destroys window/renderer and quits SDL subsystems
+                Game game;
+                game.run(stageChar);
+                isRunning = false;
+            });
+            std::cerr << "Start::render - Stages::init returned=" << (ok ? "true" : "false") << "\n";
+            if (!ok) stagesView.reset();
+        }
+    }
+
+    // draw buttons (if still present)
     if (playBtn) playBtn->render();
     if (settingsBtn) settingsBtn->render();
+
+    // render stages view over background if present
+    if (stagesView) stagesView->render();
 
     // render account panel over other UI if present
     if (accountPanel) accountPanel->render();

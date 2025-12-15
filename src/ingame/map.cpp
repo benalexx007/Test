@@ -9,10 +9,10 @@ SDL_Texture* Map::loadTexture(const std::string& path) {
     return tex;
 }
 
-Map::Map(SDL_Renderer* ren, const std::string& stage) : renderer(ren) {
-    tex_floor_light = loadTexture("assets/images/grid/lightGrid" + stage + ".png");
-    tex_floor_dark  = loadTexture("assets/images/grid/darkGrid" + stage + ".png");
-    tex_wall        = loadTexture("assets/images/wall/wall" + stage + ".png");
+Map::Map(SDL_Renderer* ren, char stage) : renderer(ren) {
+    tex_floor_light = loadTexture("assets/images/grid/lightGrid" + std::string(1, stage) + ".png");
+    tex_floor_dark  = loadTexture("assets/images/grid/darkGrid" + std::string(1, stage) + ".png");
+    tex_wall        = loadTexture("assets/images/wall/wall" + std::string(1, stage) + ".png");
 }
 
 Map::~Map() {

@@ -15,8 +15,8 @@ public:
     Background(SDL_Renderer* renderer = nullptr);
     ~Background();
 
-    // load textures for stage (background_stage_1..3.png)
-    bool load(const std::string& stage);
+    // load textures for stage (background{stage}_1..3.png)
+    bool load(char stage);
 
     // render current background stretched to window size
     void render(int winW, int winH);

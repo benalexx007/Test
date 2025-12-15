@@ -1,11 +1,14 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
+#include <cmath>
 #include <memory>
 #include "ingame/button.h"
 #include "ingame/background.h"
 #include "ingame/panel.h"
 #include "user.h"
+#include "stages.h"
+#include "game.h"
 
 class Start {
 public:
@@ -38,6 +41,13 @@ private:
     std::unique_ptr<AccountPanel> accountPanel;
     bool pendingShowMainButtons = false;
 
+    // stages view
+    std::unique_ptr<Stages> stagesView;
+    bool buttonsSlidingOut = false;
+    Uint32 slideStartTime = 0;
+    Uint32 slideDurationMs = 350;
+    int playBtnStartX = 0;
+    int settingsBtnStartX = 0;
     bool isRunning = false;
     int winW = 1920;
     int winH = 991;

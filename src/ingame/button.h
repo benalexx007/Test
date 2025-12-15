@@ -41,6 +41,10 @@ public:
     // position / size / text
     void setPosition(int x, int y);
     void setSize(int w, int h);
+
+    // accessors for current position
+    int getX() const;
+    int getY() const;
     // measured image size (if created from texture)
     int getWidth() const;
     int getHeight() const;

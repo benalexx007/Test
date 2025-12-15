@@ -124,8 +124,17 @@ void Textbox::handleEvent(const SDL_Event& e)
     if (focused && e.type == SDL_EVENT_TEXT_INPUT) {
         const char* text = e.text.text;
         if (text && text[0] != '\0') {
-            currentInput.insert(cursorPos, text);
-            cursorPos += std::strlen(text);
+            const size_t MAX_INPUT_LEN = 4096; // keep input bounded
+            size_t addLen = std::strlen(text);
+            if (currentInput.size() + addLen > MAX_INPUT_LEN) {
+                // truncate appended text to fit
+                size_t canAdd = (currentInput.size() < MAX_INPUT_LEN) ? (MAX_INPUT_LEN - currentInput.size()) : 0;
+                if (canAdd > 0) currentInput.insert(cursorPos, std::string(text, text + canAdd));
+                cursorPos = std::min(cursorPos + canAdd, currentInput.length());
+            } else {
+                currentInput.insert(cursorPos, text);
+                cursorPos += addLen;
+            }
             updateDisplayText();
         }
     }

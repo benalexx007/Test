@@ -1,15 +1,17 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 
-class Game; // forward
+class Start;
+class Game;
 
 class User {
 public:
     struct Record {
         std::string username;
         std::string password;
-        int stage = -1;
+        char stage = '0';
     };
 
     User(const std::string& filepath = "users.bin");
@@ -30,8 +32,12 @@ public:
     // accessors
     std::string getUsername() const;
     std::string getPassword() const;
-    int getStage() const;
-    void setStage(int s);
+    char getStage() const;
+    void setStage(char s);
+
+    // persisted sign flag: 0 = last session not explicitly logged out, 1 = explicitly logged out
+    void setSign(bool s);
+    bool getSign() const;
 
     // all records (useful for external tools)
     const std::vector<Record>& all() const { return records; }
@@ -43,9 +49,11 @@ private:
     // currently active user info (copied from records.front() when logged in)
     std::string username;
     std::string password;
-    int stage = -1;
+    char stage = '0';
+
+    uint8_t sign = 0; // persisted flag stored in the binary file
 
     // helpers
-    static bool writeString(std::ofstream& ofs, const std::string& s);
-    static bool readString(std::ifstream& ifs, std::string& s);
+    bool writeString(std::ofstream& ofs, const std::string& s);
+    bool readString(std::ifstream& ifs, std::string& s);
 };

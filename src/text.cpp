@@ -43,22 +43,30 @@ bool Text::updateTexture()
         w = h = 0;
     }
 
+    // protect against huge allocations from very long text
+    const size_t MAX_TEXT_LEN = 200000; // arbitrary sane limit
+    if (currentText.size() > MAX_TEXT_LEN) {
+        std::cerr << "Text::updateTexture - text too long (" << currentText.size() << " chars)\n";
+        return false;
+    }
+
     if (currentText.empty()) return true;
 
     if (!font || !renderer) return false;
 
     SDL_Surface* surf = nullptr;
     if (wrapWidth > 0) {
-        // use wrapped rendering when wrapWidth set
-        surf = TTF_RenderText_Blended_Wrapped(font, currentText.c_str(), 0, color, wrapWidth);
+        // pass length and wrap width in correct order
+        size_t len = currentText.size();
+        surf = TTF_RenderText_Blended_Wrapped(font, currentText.c_str(), len, color, wrapWidth);
     } else {
-        // single-line blended render
-        surf = TTF_RenderText_Blended(font, currentText.c_str(), 0, color);
+        size_t len = currentText.size();
+        surf = TTF_RenderText_Blended(font, currentText.c_str(), len, color);
     }
 
     if (!surf) {
         std::cerr << "Text::updateTexture - TTF_RenderText... failed | " << SDL_GetError() << "\n";
-         return false;
+        return false;
     }
 
     // Trim empty/transparent columns from the left and right so the resulting texture width
