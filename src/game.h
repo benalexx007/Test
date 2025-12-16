@@ -28,8 +28,11 @@ private:
     int offsetY = 0;
     User user;
     char currentStage;
-    enum class GameState { Playing, Victory, Lost };
+    enum class GameState { Playing, Victory, Lost, TheEnd };
     GameState gameState = GameState::Playing;
+
+    // Text hiển thị "THE END"
+    Text theEndText;
 public:
     Map* map = nullptr;
     Explorer* explorer = nullptr;

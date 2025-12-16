@@ -2,7 +2,7 @@
 #include "audio.h"
 #include "start.h"
 #include <cmath>
-
+static const int MAX_STAGE = 3;
 // Khai báo global audio instance
 extern Audio* g_audioInstance;
 
@@ -80,6 +80,23 @@ void Game::handleEvents()
     int curH = winH;
     while (SDL_PollEvent(&e))
     {
+        if (gameState == GameState::TheEnd) {
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                e.type == SDL_EVENT_KEY_DOWN ||
+                e.type == SDL_EVENT_QUIT) {
+
+                // Tắt game hiện tại
+                isRunning = false;
+                cleanup();   // đóng cửa sổ game, giải phóng tài nguyên
+
+                // Mở lại Start menu
+                Start start;
+                start.run();
+                return;      // Thoát hàm handleEvents
+            }
+            // Nếu không có input trên thì bỏ qua event
+            continue;
+        }
         if (e.type == SDL_EVENT_QUIT)
             isRunning = false;
 
@@ -155,21 +172,37 @@ void Game::update()
     }
     if (gameState == GameState::Playing && explorer && map) {
         if (map->isExit(explorer->getX(), explorer->getY())) {
+    
+            // Nếu đang ở màn tối đa (3) → chuyển sang màn hình THE END
+                    // Nếu đang ở màn tối đa (3) → chuyển sang màn hình THE END
+        if ((currentStage - '0') >= MAX_STAGE) {
+            gameState = GameState::TheEnd;
+
+            // Tạo text "THE END" bằng class Text có sẵn trong project
+            SDL_Color color = {255, 255, 255, 255};
+            if (theEndText.create(renderer, "assets/font.ttf", 120, "THE END", color)) {
+                int x = (winW - theEndText.getWidth()) / 2;
+                int y = (winH - theEndText.getHeight()) / 2;
+                theEndText.setPosition(x, y);
+            }
+        } else {
+            // Ngược lại: xử lý thắng bình thường, hiện VictoryPanel + nút Next
             gameState = GameState::Victory;
-            // Tạo victory panel
-            if (!victoryPanel) {
-                victoryPanel = new VictoryPanel(renderer);
-                if (victoryPanel->init(winW, winH, [this]() {
-                    // Next level callback - restart game với stage mới
-                    char nextStage = currentStage + 1;
-                    std::cerr << "Loading next level: " << nextStage << "\n";  // Debug
-                    cleanupForRestart();
-                    init(nextStage);
-                    std::cerr << "Next level loaded\n";  // Debug
-                })) {
-                    int px = (winW - victoryPanel->getWidth()) / 2;
-                    int py = (winH - victoryPanel->getHeight()) / 2;
-                    victoryPanel->setPosition(px, py);
+            
+                if (!victoryPanel) {
+                    victoryPanel = new VictoryPanel(renderer);
+                    if (victoryPanel->init(winW, winH, [this]() {
+                        // Next level callback - restart game với stage mới
+                        char nextStage = currentStage + 1;
+                        std::cerr << "Loading next level: " << nextStage << "\n";  // Debug
+                        cleanupForRestart();
+                        init(nextStage);
+                        std::cerr << "Next level loaded\n";  // Debug
+                    })) {
+                        int px = (winW - victoryPanel->getWidth()) / 2;
+                        int py = (winH - victoryPanel->getHeight()) / 2;
+                        victoryPanel->setPosition(px, py);
+                    }
                 }
             }
         }
@@ -200,6 +233,15 @@ void Game::render()
 {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
+
+    // ===== THÊM KHỐI XỬ LÝ THE END TẠI ĐÂY =====
+    if (gameState == GameState::TheEnd) {
+        theEndText.render();
+        SDL_RenderPresent(renderer);
+        return; 
+    }
+    // ===== HẾT KHỐI THE END =====
+
     if (background) background->render(winW, winH);
     map->render(offsetX, offsetY);
     explorer->render(offsetX, offsetY);
@@ -260,6 +302,7 @@ void Game::cleanup()
 
     SDL_DestroyWindow(window);
     window = nullptr;
+    theEndText.cleanup();
 
     isRunning = false;
 }
@@ -296,7 +339,7 @@ void Game::cleanupForRestart()
     explorer = nullptr;
     delete mummy;
     mummy = nullptr;
-    
+    theEndText.cleanup();
     // Reset game state
     gameState = GameState::Playing;  // Thêm dòng này
     turn = 0;  // Thêm dòng này

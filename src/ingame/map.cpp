@@ -13,7 +13,7 @@ Map::Map(SDL_Renderer* ren, char stage) : renderer(ren) {
     tex_floor_light = loadTexture("assets/images/grid/lightGrid" + std::string(1, stage) + ".png");
     tex_floor_dark  = loadTexture("assets/images/grid/darkGrid" + std::string(1, stage) + ".png");
     tex_wall        = loadTexture("assets/images/wall/wall" + std::string(1, stage) + ".png");
-    tex_exit        = loadTexture("assets/images/grid/exit1.png");
+    tex_exit        = loadTexture("assets/images/grid/exit1.jpg");
 }
 
 Map::~Map() {
