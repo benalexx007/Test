@@ -285,8 +285,8 @@ bool IngamePanel::initForStage(Game* owner,
     // add title image centered near top (3% down), size 300x200
     SDL_Texture* titleTex = IMG_LoadTexture(renderer, "assets/images/title.png");
     if (titleTex) {
-        int yText = static_cast<int>(getHeight() * 0.03f);
-        addImage(titleTex, 0, yText, 300, 200, HAlign::Center, VAlign::Top);
+        int yText = static_cast<int>(getHeight() * 0.12f);
+        addImage(titleTex, 0, yText, 300, 150, HAlign::Center, VAlign::Top);
     } else {
         std::cerr << "IngamePanel::initForStage failed to load title image: " << SDL_GetError() << "\n";
     }

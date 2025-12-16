@@ -35,8 +35,8 @@ void Start::init()
     TTF_Init();
 
     window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
-    renderer = SDL_CreateRenderer(window, NULL);
     SDL_MaximizeWindow(window);
+    renderer = SDL_CreateRenderer(window, NULL);
 
     bgTexture = IMG_LoadTexture(renderer, "assets/images/background/background.png");
 
