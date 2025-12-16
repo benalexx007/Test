@@ -116,6 +116,28 @@ public:
     // initialize panel UI. hasUserFile == true when users file exists.
     // onChanged() called when account state changes (e.g. signin created file)
     bool init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged = nullptr);
+
+private:
+    enum class Mode {
+        FirstRunCreate,  // no file yet -> force user to create account
+        MainMenu,        // file exists -> show SIGN IN / LOG IN / LOG OUT menu
+        CreateAccount,   // fullscreen create/register form
+        Login            // fullscreen login form
+    };
+
+    Mode mode = Mode::MainMenu;
+    User* userPtr = nullptr;                     // non-owning pointer to User
+    std::function<void()> onChangedCallback;     // called when account state changes
+
+    // non-owning pointers to textbox children (owned by Panel via unique_ptr)
+    Textbox* usernameTb = nullptr;
+    Textbox* passwordTb = nullptr;
+
+    // internal builders for each UI mode
+    void buildFirstRunCreate();
+    void buildMainMenu();
+    void buildCreateAccount();
+    void buildLogin();
 };
 
 class SettingsPanel : public AccountPanel {

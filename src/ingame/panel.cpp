@@ -331,118 +331,376 @@ AccountPanel::AccountPanel(SDL_Renderer* renderer) : Panel(renderer) {}
 
 bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged)
 {
-    // create panel at the requested size
-    if (!create(renderer, 0, 0, winW, winH)) {
+    // Giữ lại vị trí + kích thước hiện tại của panel
+    int px = getX();
+    int py = getY();
+    int pw = getWidth();
+    int ph = getHeight();
+
+    // Nếu chưa có size (lần đầu gọi từ Start), dùng tham số truyền vào
+    if (pw == 0 || ph == 0) {
+        pw = winW;
+        ph = winH;
+    }
+
+    // Tạo lại panel tại đúng vị trí cũ, chỉ reset nội dung bên trong
+    if (!create(renderer, px, py, pw, ph)) {
         std::cerr << "AccountPanel::init - failed to create panel\n";
         return false;
     }
 
-    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
-        std::cerr << "AccountPanel::init - failed to load background\n";
-        return false;
-    }
+    userPtr = user;
+    onChangedCallback = std::move(onChanged);
+    usernameTb = nullptr;
+    passwordTb = nullptr;
 
-    const SDL_Color titleCol = { 255, 0, 0, 255 };
-    const SDL_Color btnCol = { 0xf9, 0xf2, 0x6a, 0xFF };
-
-    // On first run (no user file): show account creation UI with textboxes
     if (!hasUserFile) {
-        // Title: start at panel Y + 35% of panel height
-        // Make title font ~20% of panel height (clamped)
-        int titleFontSize = 72;
-        int titleLocalY = static_cast<int>(getHeight() * 0.30f);
-        addText("assets/font.ttf", titleFontSize, "CREATE AN ACCOUNT", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
-
-        // Cursor starts below the title (title height + padding)
-        int paddingAfterTitle = 30;
-        int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
-
-        // Textbox sizes and spacing
-        int tbW = 1500;
-        int tbH = 85;
-        int tbSpacing = 24;
-
-        // Username textbox (centered)
-        Textbox* usernameTb = addTextbox(0, cursorY, tbW, tbH, "assets/images/textbox/inputTextbox.png", "USERNAME", 72, {0,0,0,255}, "assets/font.ttf", HAlign::Center, VAlign::Top);
-        cursorY += tbH + tbSpacing;
-
-        // Password textbox (centered)
-        Textbox* passwordTb = addTextbox(0, cursorY, tbW, tbH, "assets/images/textbox/inputTextbox.png", "PASSWORD", 72, {0,0,0,255}, "assets/font.ttf", HAlign::Center, VAlign::Top);
-        cursorY += tbH + 40; // a bit more space before confirm
-
-        // Confirm button centered below textboxes
-        Button* confirmBtn = addButton(0, cursorY, 350, 85, "CONFIRM", 72, {0xf9,0xf2,0x6a,0xFF}, "assets/font.ttf", HAlign::Center, VAlign::Top);
-        if (confirmBtn) {
-            confirmBtn->setLabelPositionPercent(0.5f, 0.70f);
-            confirmBtn->setCallback([user, usernameTb, passwordTb, onChanged]() {
-                if (!user || !usernameTb || !passwordTb) return;
-                std::string username = usernameTb->getText();
-                std::string password = passwordTb->getText();
-                if (username.empty() || password.empty()) {
-                    std::cerr << "AccountPanel: username or password is empty\n";
-                    return;
-                }
-                bool ok = user->signin(username, password);
-                if (!ok) {
-                    std::cerr << "AccountPanel: signin failed\n";
-                } else {
-                    if (onChanged) onChanged();
-                }
-            });
-        }
+        mode = Mode::FirstRunCreate;
+        buildFirstRunCreate();
     } else {
-        // User file exists: show login options (existing code)
-        const int BtnW = 350;
-        const int BtnH = 85;
-        const int Padding = 16;
-        const int FontSize = 72;
-
-        auto onAccount = [&user]() -> bool {
-            if (!user) return false;
-            std::string uname = user->getUsername();
-            if (uname.empty()) return false;
-            if (uname.size() == 1 && uname[0] == '\0') return false;
-            return true;
-        };
-
-        std::vector<std::string> labels;
-        labels.push_back("SIGN IN");
-        labels.push_back("LOG IN");
-        if (onAccount()) labels.push_back("LOG OUT");
-
-        int n = static_cast<int>(labels.size());
-        int totalH = n * BtnH + (n - 1) * Padding;
-        int startY = (getHeight() - totalH) / 2;
-
-        for (int i = 0; i < n; ++i) {
-            int localY = startY + i * (BtnH + Padding);
-            Button* b = addButton(0, localY, BtnW, BtnH, labels[i], FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
-            if (!b) continue;
-            b->setLabelPositionPercent(0.5f, 0.70f);
-
-            std::string lbl = labels[i];
-            if (lbl == "SIGN IN") {
-                b->setCallback([user, onChanged]() {
-                    if (!user) return;
-                    bool ok = user->signin("player", "");
-                    if (!ok) std::cerr << "AccountPanel: signin failed\n";
-                    if (onChanged) onChanged();
-                });
-            } else if (lbl == "LOG IN") {
-                b->setCallback([]() {
-                    // TODO: open login dialog
-                });
-            } else if (lbl == "LOG OUT") {
-                b->setCallback([user, onChanged]() {
-                    if (!user) return;
-                    user->logout();
-                    if (onChanged) onChanged();
-                });
-            }
-        }
+        mode = Mode::MainMenu;
+        buildMainMenu();
     }
 
     return true;
+}
+
+// -------- AccountPanel helpers --------
+
+void AccountPanel::buildFirstRunCreate()
+{
+    // First time ever (no file yet) -> force create account
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    // Clear any existing UI and restore background
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildFirstRunCreate - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.30f);
+    addText("assets/font.ttf", titleFontSize, "CREATE AN ACCOUNT", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    int paddingAfterTitle = 30;
+    int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
+
+    int tbW = 1500;
+    int tbH = 85;
+    int tbSpacing = 24;
+
+    // Username textbox (centered)
+    usernameTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "USERNAME", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + tbSpacing;
+
+    // Password textbox (centered)
+    passwordTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "PASSWORD", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + 40; // a bit more space before confirm
+
+    // Confirm button centered below textboxes
+    Button* confirmBtn = addButton(0, cursorY, 350, 85,
+                                   "CONFIRM", 72,
+                                   SDL_Color{0xf9,0xf2,0x6a,0xFF},
+                                   "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (confirmBtn) {
+        confirmBtn->setLabelPositionPercent(0.5f, 0.70f);
+        confirmBtn->setCallback([this]() {
+            if (!userPtr || !usernameTb || !passwordTb) return;
+            std::string username = usernameTb->getText();
+            std::string password = passwordTb->getText();
+
+            // Trim spaces
+            auto trim = [](std::string& s) {
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), s.end());
+            };
+            trim(username);
+            trim(password);
+
+            if (username.empty() || password.empty()) {
+                std::cerr << "AccountPanel: username or password is empty\n";
+                return;
+            }
+            bool ok = userPtr->signin(username, password);
+            if (!ok) {
+                std::cerr << "AccountPanel: signin failed\n";
+            } else {
+                if (onChangedCallback) onChangedCallback();
+            }
+        });
+    }
+}
+
+void AccountPanel::buildMainMenu()
+{
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildMainMenu - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+    const SDL_Color btnCol   = { 0xf9, 0xf2, 0x6a, 0xFF };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.25f);
+    addText("assets/font.ttf", titleFontSize, "ACCOUNT", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Show current account info
+    std::string currentUser = (userPtr ? userPtr->getUsername() : "");
+    bool hasActive = userPtr && !currentUser.empty() && !userPtr->getSign();
+
+    std::string info = "CURRENT: ";
+    info += hasActive ? currentUser : std::string("NONE");
+    int infoFontSize = 48;
+    int infoY = titleLocalY + titleFontSize + 10;
+    addText("assets/font.ttf", infoFontSize, info, btnCol,
+            0, infoY, HAlign::Center, VAlign::Top);
+
+    // Buttons: SIGN IN (register), LOG IN, LOG OUT (if active)
+    const int BtnW = 350;
+    const int BtnH = 85;
+    const int Padding = 16;
+    const int FontSize = 72;
+
+    int numButtons = hasActive ? 3 : 2;
+    int totalH = numButtons * BtnH + (numButtons - 1) * Padding;
+    int startY = infoY + infoFontSize + 40;
+    startY = std::max(startY, (getHeight() - totalH) / 2);
+
+    int idx = 0;
+
+    // SIGN IN -> go to CreateAccount form (register new account)
+    {
+        int y = startY + idx * (BtnH + Padding);
+        Button* b = addButton(0, y, BtnW, BtnH, "SIGN IN", FontSize, btnCol,
+                              "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (b) {
+            b->setLabelPositionPercent(0.5f, 0.70f);
+            b->setCallback([this]() {
+                mode = Mode::CreateAccount;
+                buildCreateAccount();
+            });
+        }
+        ++idx;
+    }
+
+    // LOG IN -> go to Login form
+    {
+        int y = startY + idx * (BtnH + Padding);
+        Button* b = addButton(0, y, BtnW, BtnH, "LOG IN", FontSize, btnCol,
+                              "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (b) {
+            b->setLabelPositionPercent(0.5f, 0.70f);
+            b->setCallback([this]() {
+                mode = Mode::Login;
+                buildLogin();
+            });
+        }
+        ++idx;
+    }
+
+    // LOG OUT (only if currently logged in)
+    if (hasActive) {
+        int y = startY + idx * (BtnH + Padding);
+        Button* b = addButton(0, y, BtnW, BtnH, "LOG OUT", FontSize, btnCol,
+                              "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (b) {
+            b->setLabelPositionPercent(0.5f, 0.70f);
+            b->setCallback([this]() {
+                if (!userPtr) return;
+                userPtr->logout();
+                // Vừa logout thì reset UI về giao diện đăng ký/đăng nhập ngay
+                bool hasFile = userPtr->read();
+                if (!hasFile) {
+                    mode = Mode::FirstRunCreate;
+                    buildFirstRunCreate();
+                } else {
+                    mode = Mode::MainMenu;
+                    buildMainMenu();
+                }
+                // Không gọi onChangedCallback ở đây để panel vẫn ở lại
+            });
+        }
+    }
+    
+}
+
+void AccountPanel::buildCreateAccount()
+{
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildCreateAccount - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+    const SDL_Color btnCol   = { 0xf9, 0xf2, 0x6a, 0xFF };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.25f);
+    addText("assets/font.ttf", titleFontSize, "SIGN IN / REGISTER", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    int paddingAfterTitle = 30;
+    int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
+
+    int tbW = 1500;
+    int tbH = 85;
+    int tbSpacing = 24;
+
+    usernameTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "USERNAME", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + tbSpacing;
+
+    passwordTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "PASSWORD", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + 40;
+
+    Button* confirmBtn = addButton(0, cursorY, 350, 85, "CONFIRM", 72,
+                                   btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (confirmBtn) {
+        confirmBtn->setLabelPositionPercent(0.5f, 0.70f);
+        confirmBtn->setCallback([this]() {
+            if (!userPtr || !usernameTb || !passwordTb) return;
+            std::string username = usernameTb->getText();
+            std::string password = passwordTb->getText();
+
+            auto trim = [](std::string& s) {
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), s.end());
+            };
+            trim(username);
+            trim(password);
+
+            if (username.empty() || password.empty()) {
+                std::cerr << "AccountPanel: username or password is empty\n";
+                return;
+            }
+            bool ok = userPtr->signin(username, password);
+            if (!ok) {
+                std::cerr << "AccountPanel: signin failed\n";
+            } else {
+                if (onChangedCallback) onChangedCallback();
+            }
+        });
+    }
+    const int BtnH = 85;
+    // Back button to go to main menu without changing account
+    int backY = cursorY + BtnH + 20;
+    Button* backBtn = addButton(0, backY, 350, 85, "BACK", 72,
+                                btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (backBtn) {
+        backBtn->setLabelPositionPercent(0.5f, 0.70f);
+        backBtn->setCallback([this]() {
+            mode = Mode::MainMenu;
+            buildMainMenu();
+        });
+    }
+    
+}
+
+void AccountPanel::buildLogin()
+{
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildLogin - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+    const SDL_Color btnCol   = { 0xf9, 0xf2, 0x6a, 0xFF };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.25f);
+    addText("assets/font.ttf", titleFontSize, "LOG IN", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    int paddingAfterTitle = 30;
+    int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
+
+    int tbW = 1500;
+    int tbH = 85;
+    int tbSpacing = 24;
+
+    usernameTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "USERNAME", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + tbSpacing;
+
+    passwordTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "PASSWORD", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + 40;
+
+    Button* loginBtn = addButton(0, cursorY, 350, 85, "LOGIN", 72,
+                                 btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (loginBtn) {
+        loginBtn->setLabelPositionPercent(0.5f, 0.70f);
+        loginBtn->setCallback([this]() {
+            if (!userPtr || !usernameTb || !passwordTb) return;
+            std::string username = usernameTb->getText();
+            std::string password = passwordTb->getText();
+
+            auto trim = [](std::string& s) {
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), s.end());
+            };
+            trim(username);
+            trim(password);
+
+            if (username.empty() || password.empty()) {
+                std::cerr << "AccountPanel: username or password is empty\n";
+                return;
+            }
+
+            bool ok = userPtr->login(username, password);
+            if (!ok) {
+                std::cerr << "AccountPanel: login failed\n";
+            } else {
+                if (onChangedCallback) onChangedCallback();
+            }
+        });
+    }
+    const int BtnH = 85;
+    // Back button to go to main menu without logging in
+    int backY = cursorY + BtnH + 20;
+    Button* backBtn = addButton(0, backY, 350, 85, "BACK", 72,
+                                btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (backBtn) {
+        backBtn->setLabelPositionPercent(0.5f, 0.70f);
+        backBtn->setCallback([this]() {
+            mode = Mode::MainMenu;
+            buildMainMenu();
+        });
+    }
 }
 
 SettingsPanel::SettingsPanel(SDL_Renderer* renderer) : AccountPanel(renderer) {}
@@ -468,16 +726,22 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
     // Tính toán vị trí bắt đầu cho các nút (dưới title)
     int startY = titleLocalY + titleFontSize + 30;
 
-    // Nút CHANGE ACCOUNT
+   // Nút CHANGE ACCOUNT (ACCOUNT)
     int yChangeAccount = startY;
     Button* changeAccountBtn = addButton(0, yChangeAccount, BtnW, BtnH, "ACCOUNT", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
-    if (changeAccountBtn) {
-        changeAccountBtn->setLabelPositionPercent(0.5f, 0.70f);
-        changeAccountBtn->setCallback([user, onChanged]() {
-            // TODO: Implement change account functionality
-            if (onChanged) onChanged();
-        });
-    }
+if (changeAccountBtn) {
+    changeAccountBtn->setLabelPositionPercent(0.5f, 0.70f);
+    changeAccountBtn->setCallback([this, user, winW, winH, onChanged]() {
+        if (!user) return;
+
+        // Giữ nguyên kích thước panel hiện tại
+        bool hasUserFile = user->read();
+        AccountPanel::init(user, hasUserFile, winW, winH, onChanged);
+
+        // KHÔNG setPosition nữa, giữ nguyên x,y đã được Start căn giữa
+        // (AccountPanel::init đã được mình sửa để dùng lại getX()/getY())
+    });
+}
 
     // Nút MUSIC
     int yMusic = yChangeAccount + BtnH + Padding;
