@@ -710,42 +710,46 @@ bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> o
     if (!create(renderer, 0, 0, winW, winH)) return false;
     if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
 
-    // Thêm tiêu đề SETTINGS
+    // Tiêu đề SETTINGS
     const SDL_Color titleCol = {255, 0, 0, 255};
     int titleFontSize = 72;
     int titleLocalY = static_cast<int>(getHeight() * 0.30f);
-    addText("assets/font.ttf", titleFontSize, "SETTINGS", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+    addText("assets/font.ttf", titleFontSize, "SETTINGS",
+            titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
 
-    // Màu và kích thước cho các nút
-    const SDL_Color btnCol = { 0xf9, 0xf2, 0x6a, 0xFF };
+    // Màu + kích thước nút
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
     const int BtnW = 350;
     const int BtnH = 85;
     const int Padding = 16;
     const int FontSize = 72;
 
-    // Tính toán vị trí bắt đầu cho các nút (dưới title)
-    int startY = titleLocalY + titleFontSize + 30;
+    // Vị trí bắt đầu dưới chữ SETTINGS
+    int baseY = titleLocalY + titleFontSize + 30;
 
-   // Nút CHANGE ACCOUNT (ACCOUNT)
-    int yChangeAccount = startY;
-    Button* changeAccountBtn = addButton(0, yChangeAccount, BtnW, BtnH, "ACCOUNT", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
-if (changeAccountBtn) {
-    changeAccountBtn->setLabelPositionPercent(0.5f, 0.70f);
-    changeAccountBtn->setCallback([this, user, winW, winH, onChanged]() {
-        if (!user) return;
+    // Nút ACCOUNT: chỉ hiện ngoài game
+    int yAfterAccount = baseY;
+    if (!isInGame) {
+        Button* accountBtn = addButton(0, baseY, BtnW, BtnH, "ACCOUNT",
+                                       FontSize, btnCol, "assets/font.ttf",
+                                       HAlign::Center, VAlign::Top);
+        if (accountBtn) {
+            accountBtn->setLabelPositionPercent(0.5f, 0.70f);
+            accountBtn->setCallback([this, user, winW, winH, onChanged]() {
+                if (!user) return;
+                bool hasUserFile = user->read();
+                AccountPanel::init(user, hasUserFile, winW, winH, onChanged);
+                // Giữ nguyên vị trí panel hiện tại
+            });
+        }
+        yAfterAccount = baseY + BtnH + Padding;
+    }
 
-        // Giữ nguyên kích thước panel hiện tại
-        bool hasUserFile = user->read();
-        AccountPanel::init(user, hasUserFile, winW, winH, onChanged);
-
-        // KHÔNG setPosition nữa, giữ nguyên x,y đã được Start căn giữa
-        // (AccountPanel::init đã được mình sửa để dùng lại getX()/getY())
-    });
-}
-
-    // Nút MUSIC
-    int yMusic = yChangeAccount + BtnH + Padding;
-    Button* musicBtn = addButton(0, yMusic, BtnW, BtnH, "MUSIC", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    // Nút MUSIC: luôn nằm ngay dưới SETTINGS (hoặc dưới ACCOUNT nếu có)
+    int yMusic = isInGame ? baseY : yAfterAccount;
+    Button* musicBtn = addButton(0, yMusic, BtnW, BtnH, "MUSIC",
+                                 FontSize, btnCol, "assets/font.ttf",
+                                 HAlign::Center, VAlign::Top);
     if (musicBtn) {
         musicBtn->setLabelPositionPercent(0.5f, 0.70f);
         musicBtn->setCallback([]() {
@@ -757,49 +761,46 @@ if (changeAccountBtn) {
         });
     }
 
-    // Nút SOUND
-    int ySound = yMusic + BtnH + Padding;
-    Button* soundBtn = addButton(0, ySound, BtnW, BtnH, "SOUND", FontSize, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
-    if (soundBtn) {
-        soundBtn->setLabelPositionPercent(0.5f, 0.70f);
-        soundBtn->setCallback([]() {
-            // TODO: Implement sound toggle functionality
-        });
-    }
+    // Dòng tiếp theo sau MUSIC
+    int currentY = yMusic + BtnH + Padding;
 
-    int currentY = ySound + BtnH + Padding;
-    int curBtnW = BtnW;
-    int currentX = (this -> getWidth() - curBtnW)/2;
-    int curFontSize=72;
-
-    // Nếu đang trong Game, thêm nút RETURN
     if (isInGame) {
-        // Nút RETURN (đóng panel và tiếp tục chơi)
-        Button* returnBtn = addButton(currentX, currentY, ((curBtnW -= 16) /= 2), BtnH, "RETURN", (curFontSize/=2), btnCol, "assets/font.ttf", HAlign::Left, VAlign::Top);
+        // Trong game: RETURN 1 dòng riêng, QUIT 1 dòng riêng
+
+        // RETURN
+        Button* returnBtn = addButton(0, currentY, BtnW, BtnH, "RETURN",
+                                      FontSize, btnCol, "assets/font.ttf",
+                                      HAlign::Center, VAlign::Top);
         if (returnBtn) {
-            std::cout<<curBtnW<<'\n';
             returnBtn->setLabelPositionPercent(0.5f, 0.70f);
             returnBtn->setCallback([onChanged]() {
                 // Đóng panel và tiếp tục chơi
                 if (onChanged) onChanged();
             });
         }
-        currentX += curBtnW + 16;
-        std::cout<<currentX<<'\n';
-    }
 
-    // Nút QUIT
-    // Trong Game: thoát game, trong Start: chỉ đóng panel
-    Button* quitBtn = addButton(currentX, currentY, curBtnW, BtnH, "QUIT", curFontSize, btnCol, "assets/font.ttf", HAlign::Left, VAlign::Top);
-    if (quitBtn) {
-        quitBtn->setLabelPositionPercent(0.5f, 0.70f);
-        if (isInGame && onQuitGame) {
-            // Trong Game: thoát game
-            quitBtn->setCallback([onQuitGame]() {
-                if (onQuitGame) onQuitGame();
-            });
-        } else {
-            // Trong Start: chỉ đóng panel
+        currentY += BtnH + Padding;
+
+        // QUIT (thoát game)
+        Button* quitBtn = addButton(0, currentY, BtnW, BtnH, "QUIT",
+                                    FontSize, btnCol, "assets/font.ttf",
+                                    HAlign::Center, VAlign::Top);
+        if (quitBtn) {
+            quitBtn->setLabelPositionPercent(0.5f, 0.70f);
+            if (onQuitGame) {
+                quitBtn->setCallback([onQuitGame]() {
+                    if (onQuitGame) onQuitGame();
+                });
+            }
+        }
+    } else {
+        // Ngoài game: chỉ có QUIT dưới MUSIC, để đóng panel SETTINGS
+
+        Button* quitBtn = addButton(0, currentY, BtnW, BtnH, "QUIT",
+                                    FontSize, btnCol, "assets/font.ttf",
+                                    HAlign::Center, VAlign::Top);
+        if (quitBtn) {
+            quitBtn->setLabelPositionPercent(0.5f, 0.70f);
             quitBtn->setCallback([onChanged]() {
                 if (onChanged) onChanged();
             });
