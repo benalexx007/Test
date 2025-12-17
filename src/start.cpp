@@ -45,27 +45,20 @@ void Start::init()
     bool hasFile = user.read();
     user.Init();
 
-    // ensure main buttons exist
-    createMainButtons();
-    std::cerr << "Start::init - createMainButtons called\n";
+    // Kiểm tra xem user đã đăng nhập hay chưa
+    bool isLoggedIn = user.isLoggedIn();
 
     // createMainButtons moved to member function
     (void)TextColor; // silence unused warning until member method uses it
 
-    if (hasFile) {
-        createMainButtons();
-    } else {
-        // No user file: show account creation panel
+    // Nếu không có file -> hiện màn hình đăng ký
+    if (!hasFile) {
         accountPanel.reset();
         accountPanel = std::make_unique<AccountPanel>(renderer);
         const int panelW = 1750;
         const int panelH = 900;
         if (accountPanel->init(&user, false, panelW, panelH, [this]() {
-            // Request showing main buttons — defer actual cleanup until
-            // we're out of event handling to avoid deleting the panel
-            // while it's processing its own event.
             pendingShowMainButtons = true;
-            // refresh user state now (safe)
             user.read();
             user.Init();
         })) {
@@ -73,6 +66,27 @@ void Start::init()
             int py = (winH - panelH) / 2;
             accountPanel->setPosition(px, py);
         }
+    }
+    // Nếu có file nhưng chưa đăng nhập -> hiện màn hình SIGN IN / LOG IN
+    else if (!isLoggedIn) {
+        accountPanel.reset();
+        accountPanel = std::make_unique<AccountPanel>(renderer);
+        const int panelW = 1750;
+        const int panelH = 900;
+        if (accountPanel->init(&user, true, panelW, panelH, [this]() {
+            // Sau khi đăng nhập thành công, hiện main buttons
+            pendingShowMainButtons = true;
+            user.read();
+            user.Init();
+        })) {
+            int px = (winW - panelW) / 2;
+            int py = (winH - panelH) / 2;
+            accountPanel->setPosition(px, py);
+        }
+    }
+    // Nếu đã đăng nhập -> hiện main buttons
+    else {
+        createMainButtons();
     }
 
     isRunning = true;

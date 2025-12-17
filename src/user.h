@@ -39,6 +39,7 @@ public:
     // persisted sign flag: 0 = last session not explicitly logged out, 1 = explicitly logged out
     void setSign(bool s);
     bool getSign() const;
+    bool isLoggedIn() const;
 
     // all records (useful for external tools)
     const std::vector<Record>& all() const { return records; }

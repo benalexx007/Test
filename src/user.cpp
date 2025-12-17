@@ -171,6 +171,11 @@ bool User::updateStage(char newStage)
 }
 void User::setSign(bool s) { sign = s ? 1 : 0; }
 bool User::getSign() const { return sign != 0; }
+bool User::isLoggedIn() const
+{
+    // User đã đăng nhập nếu username không rỗng và sign == 0 (chưa logout)
+    return !username.empty() && sign == 0;
+}
 
 // helpers for string read/write (length + raw bytes)
 bool User::writeString(std::ofstream& ofs, const std::string& s)
