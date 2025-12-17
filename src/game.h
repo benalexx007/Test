@@ -12,6 +12,7 @@
 #include "text.h"
 #include "functions.h"
 #include "user.h"
+#include <vector>
 
 class Game {
 private:
@@ -30,6 +31,21 @@ private:
     char currentStage;
     enum class GameState { Playing, Victory, Lost };
     GameState gameState = GameState::Playing;
+
+    struct State {
+        int expX, expY;
+        int mumX, mumY;
+    };
+
+    // [Thêm] Hai ngăn xếp để lưu lịch sử
+    std::vector<State> undoStack;
+    std::vector<State> redoStack;
+
+    // [Thêm] Hàm hỗ trợ
+    void saveState();        // Lưu trạng thái hiện tại vào undoStack
+    void performUndo();      // Thực hiện Undo
+    void performRedo();      // Thực hiện Redo
+    void restoreState(const State& state); // Khôi phục vị trí từ State
 public:
     Map* map = nullptr;
     Explorer* explorer = nullptr;
