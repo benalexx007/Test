@@ -168,21 +168,7 @@ void Stages::render()
         SDL_FRect dst = computeDstForIndex(i);
         // choose appearance
         if (isIndexUnlocked(i)) {
-            int unlockedStage = static_cast<int>(user->getStage() - '0'); // numeric: 1,2,3
-            if (unlockedStage >= i + 1) {
-                SDL_RenderTexture(renderer, tex[i], nullptr, &dst);
-            }
-            if (unlockedStage == i) {
-                 // simulate blur/fade: render texture dimmed
-                // modulate color to desaturate (grayish) and alpha
-                SDL_SetTextureBlendMode(tex[i], SDL_BLENDMODE_BLEND);
-                SDL_SetTextureAlphaMod(tex[i], 200);
-                SDL_SetTextureColorMod(tex[i], 180, 180, 180);
-                SDL_RenderTexture(renderer, tex[i], nullptr, &dst);
-                // reset mods (best effort)
-                SDL_SetTextureAlphaMod(tex[i], 255);
-                SDL_SetTextureColorMod(tex[i], 255, 255, 255);
-        }
+            SDL_RenderTexture(renderer, tex[i], nullptr, &dst);
         } else {
                 // locked: render box with "?" centered and border (double-render)
                 SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);

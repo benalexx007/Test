@@ -4,40 +4,13 @@
 #include "ingame/panel.h"
 #include "stages.h"
 #include "game.h"
-#include "audio.h"
-Audio* g_audioInstance = nullptr;
 
 Start::Start() {}
 Start::~Start() { cleanup(); }
 
 void Start::init()
 {
-    SDL_Init(SDL_INIT_VIDEO);
-
-    SDL_Init(SDL_INIT_AUDIO);
-        // Nếu đã có audio instance, cleanup nó trước
-        if (g_audioInstance) {
-            g_audioInstance->cleanup();  // Bỏ dòng stopBackgroundMusic()
-            delete g_audioInstance;
-            g_audioInstance = nullptr;
-        }
-    g_audioInstance = new Audio();
-    if (g_audioInstance->init()) {
-        // Load và phát nhạc nền
-        // Lưu ý: Convert MP3 sang WAV trước, hoặc dùng decoder
-        if (g_audioInstance->loadBackgroundMusic("assets/audio/background_music.wav")) {
-            g_audioInstance->playBackgroundMusic(true); // Loop
-        } else {
-            std::cerr << "Failed to load background music\n";
-        }
-    }
-    
-    TTF_Init();
-
-    window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, NULL);
-    SDL_MaximizeWindow(window);
-
     bgTexture = IMG_LoadTexture(renderer, "assets/images/background/background.png");
 
     const SDL_Color TextColor = { 0xf9, 0xf2, 0x6a, 0xFF };
@@ -251,7 +224,7 @@ void Start::render()
                 // start game with selected stage char: cleanup UI first
                 this->cleanup(); // destroys window/renderer and quits SDL subsystems
                 Game game;
-                game.run(stageChar);
+                game.run(stageChar, window);
                 isRunning = false;
             });
             std::cerr << "Start::render - Stages::init returned=" << (ok ? "true" : "false") << "\n";
@@ -282,23 +255,14 @@ void Start::cleanup()
 
     if (bgTexture) { SDL_DestroyTexture(bgTexture); bgTexture = nullptr; }
     
-    if (g_audioInstance) {
-        g_audioInstance->cleanup();
-        delete g_audioInstance;
-        g_audioInstance = nullptr;
-    }
-
     SDL_DestroyRenderer(renderer); renderer = nullptr;
-    SDL_DestroyWindow(window); window = nullptr;
-
-    SDL_Quit();
-    TTF_Quit();
 
     isRunning = false;
 }
 
-void Start::run()
+void Start::run(SDL_Window *win)
 {
+    window = win;
     init();
     while (isRunning) {
         handleEvents();

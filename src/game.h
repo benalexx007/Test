@@ -50,6 +50,6 @@ public:
     void render();
     void cleanup();
     void cleanupForRestart();
-    void run(const char stage);
+    void run(const char stage, SDL_Window* SDL_Window);
     void toggleSettings();
 };

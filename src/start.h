@@ -19,7 +19,7 @@ public:
     void init();
 
     // main loop for the start window (blocking)
-    void run();
+    void run(SDL_Window *window);
 
     // cleanup resources
     void cleanup();

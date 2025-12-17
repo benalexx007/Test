@@ -3,8 +3,6 @@
 #include "start.h"
 #include <cmath>
 static const int MAX_STAGE = 3;
-// Khai báo global audio instance
-extern Audio* g_audioInstance;
 
 void Game::init(char stage)
 {
@@ -15,32 +13,8 @@ void Game::init(char stage)
     settingsVisible = false;  // Thêm dòng này
     
     // Chỉ init SDL nếu chưa có window
-    if (!window) {
-        SDL_Init(SDL_INIT_VIDEO);
-        
-        // Khởi tạo audio nếu chưa có (để nhạc nền tiếp tục phát)
-        if (!g_audioInstance) {
-            SDL_Init(SDL_INIT_AUDIO);
-            g_audioInstance = new Audio();
-            if (g_audioInstance->init()) {
-                // Load và phát nhạc nền
-                if (g_audioInstance->loadBackgroundMusic("assets/audio/background_music.wav")) {
-                    g_audioInstance->playBackgroundMusic(true); // Loop
-                } else {
-                    std::cerr << "Failed to load background music\n";
-                }
-            }
-        }
-        
-        // initialize SDL_ttf before any Text/TTF usage
-        if (TTF_Init() == 0) {
-            std::cerr << "TTF_Init failed: " << SDL_GetError() << "\n";
-        }
-
-        window = SDL_CreateWindow("Mê Cung Tây Du", winW, winH, SDL_WINDOW_RESIZABLE);
+    if (!renderer)
         renderer = SDL_CreateRenderer(window, NULL);
-        SDL_MaximizeWindow(window);
-    }
     
     // Khởi tạo User (giống như trong Start)
     user.read();
@@ -91,7 +65,7 @@ void Game::handleEvents()
 
                 // Mở lại Start menu
                 Start start;
-                start.run();
+                start.run(window);
                 return;      // Thoát hàm handleEvents
             }
             // Nếu không có input trên thì bỏ qua event
@@ -284,11 +258,6 @@ void Game::cleanup()
         delete lostPanel;
         lostPanel = nullptr;
     }
-    if (g_audioInstance) {
-        g_audioInstance->cleanup();
-        delete g_audioInstance;
-        g_audioInstance = nullptr;
-    }
     
     delete map;
     map = nullptr;
@@ -302,8 +271,6 @@ void Game::cleanup()
     SDL_DestroyRenderer(renderer);
     renderer = nullptr;
 
-    SDL_DestroyWindow(window);
-    window = nullptr;
     theEndText.cleanup();
 
     isRunning = false;
@@ -351,8 +318,9 @@ void Game::cleanupForRestart()
     // KHÔNG destroy window và renderer - giữ lại để restart
     // KHÔNG gọi SDL_Quit(), TTF_Quit(), và không xóa g_audioInstance
 }
-void Game::run(char stage)
+void Game::run(char stage, SDL_Window *win)
 {
+    window = win;
     init(stage);
     while (isRunning)
     {
@@ -391,7 +359,7 @@ void Game::toggleSettings() {
         [this]() {
             cleanup();
             Start start;
-            start.run();
+            start.run(window);
         })) {
         delete settingsPanel;
         settingsPanel = nullptr;
