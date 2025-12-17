@@ -120,8 +120,41 @@ void Game::handleEvents()
             curH = h;
         }
 
-        if (!panelActive && turn == 0)
+        if (!panelActive && turn == 0) // Chỉ xử lý khi đến lượt người chơi
+        {
+            // 1. Xử lý phím tắt Undo (Z) và Redo (R)
+            if (e.type == SDL_EVENT_KEY_DOWN) {
+                if (e.key.key == SDLK_Z) {
+                    performUndo();
+                    continue; // Bỏ qua xử lý di chuyển nếu đang undo
+                }
+                if (e.key.key == SDLK_R) {
+                    performRedo();
+                    continue; 
+                }
+            }
+
+            // 2. Xử lý di chuyển và Lưu trạng thái
+            // Lấy vị trí trước khi bấm phím
+            int oldExpX = explorer->getX();
+            int oldExpY = explorer->getY();
+            int oldMumX = mummy->getX();
+            int oldMumY = mummy->getY();
+
+            // Cho phép explorer xử lý input
             explorer->handleInput(e, map);
+
+            // Kiểm tra xem Explorer có thực sự di chuyển không?
+            // Nếu tọa độ thay đổi, nghĩa là nước đi hợp lệ -> Lưu vào Undo Stack
+            if (explorer->getX() != oldExpX || explorer->getY() != oldExpY) {
+                // Tạo state cũ thủ công để lưu
+                State oldState = { oldExpX, oldExpY, oldMumX, oldMumY };
+                undoStack.push_back(oldState);
+                
+                // Khi có nước đi mới, phải xóa lịch sử Redo
+                redoStack.clear();
+            }
+        }
     }
 }
 
@@ -305,6 +338,9 @@ void Game::cleanupForRestart()
     
     // KHÔNG destroy window và renderer - giữ lại để restart
     // KHÔNG gọi SDL_Quit(), TTF_Quit(), và không xóa g_audioInstance
+
+    undoStack.clear();
+    redoStack.clear();
 }
 void Game::run(char stage)
 {
@@ -356,4 +392,55 @@ void Game::toggleSettings() {
     int py = (winH - panelH) / 2;
     settingsPanel->setPosition(px, py);
     settingsVisible = true;
+}
+
+void Game::restoreState(const State& state) {
+    // Đặt lại vị trí nhân vật
+    explorer->moveTo(state.expX, state.expY);
+    mummy->moveTo(state.mumX, state.mumY);
+
+    // Reset các biến điều khiển lượt để game không bị loạn
+    turn = 0;             // Trả về lượt người chơi
+    mummyStepsLeft = 0;   // Mummy dừng lại
+    explorer->resetMoveFlag(); // Xóa cờ đã di chuyển
+    
+    // Nếu đang ở màn hình Thua/Thắng mà Undo thì quay lại trạng thái Playing
+    if (gameState != GameState::Playing) {
+        gameState = GameState::Playing;
+        // Xóa các panel thông báo nếu có
+        if (victoryPanel) { delete victoryPanel; victoryPanel = nullptr; }
+        if (lostPanel) { delete lostPanel; lostPanel = nullptr; }
+    }
+}
+
+void Game::performUndo() {
+    if (undoStack.empty()) return;
+
+    // 1. Lưu trạng thái hiện tại vào Redo Stack trước khi lùi lại
+    State currentState = { explorer->getX(), explorer->getY(), mummy->getX(), mummy->getY() };
+    redoStack.push_back(currentState);
+
+    // 2. Lấy trạng thái cũ từ Undo Stack
+    State prevState = undoStack.back();
+    undoStack.pop_back();
+
+    // 3. Khôi phục
+    restoreState(prevState);
+    std::cout << "Undo performed. Stack size: " << undoStack.size() << "\n";
+}
+
+void Game::performRedo() {
+    if (redoStack.empty()) return;
+
+    // 1. Lưu trạng thái hiện tại vào Undo Stack trước khi tiến tới
+    State currentState = { explorer->getX(), explorer->getY(), mummy->getX(), mummy->getY() };
+    undoStack.push_back(currentState);
+
+    // 2. Lấy trạng thái tương lai từ Redo Stack
+    State nextState = redoStack.back();
+    redoStack.pop_back();
+
+    // 3. Khôi phục
+    restoreState(nextState);
+    std::cout << "Redo performed.\n";
 }
