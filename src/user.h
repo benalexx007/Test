@@ -34,6 +34,7 @@ public:
     std::string getPassword() const;
     char getStage() const;
     void setStage(char s);
+    bool updateStage(char newStage);
 
     // persisted sign flag: 0 = last session not explicitly logged out, 1 = explicitly logged out
     void setSign(bool s);

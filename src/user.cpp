@@ -134,7 +134,41 @@ std::string User::getUsername() const { return username; }
 std::string User::getPassword() const { return password; }
 char User::getStage() const { return stage; }
 void User::setStage(char s) { stage = s; }
-
+bool User::updateStage(char newStage)
+{
+    // Validate stage value
+    if (newStage < '0' || newStage > '3') {
+        std::cerr << "User::updateStage - invalid stage: " << newStage << "\n";
+        return false;
+    }
+    
+    // Update in-memory stage
+    stage = newStage;
+    
+    // Read current records from file to get latest data
+    read();
+    
+    // Update stage in the first record (current user)
+    if (!records.empty()) {
+        records.front().stage = newStage;
+    } else {
+        // If no records, create one
+        Record r;
+        r.username = username;
+        r.password = password;
+        r.stage = newStage;
+        records.push_back(r);
+    }
+    
+    // Save to file
+    bool ok = write();
+    if (ok) {
+        std::cerr << "User::updateStage - updated stage to: " << newStage << "\n";
+    } else {
+        std::cerr << "User::updateStage - failed to write to file\n";
+    }
+    return ok;
+}
 void User::setSign(bool s) { sign = s ? 1 : 0; }
 bool User::getSign() const { return sign != 0; }
 

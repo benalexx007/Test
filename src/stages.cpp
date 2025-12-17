@@ -25,8 +25,19 @@ bool Stages::init(SDL_Renderer* rend, User* user_, int w, int h, std::function<v
     // prepare question mark text
     qmarkText.create(renderer, "assets/font.ttf", 72, "?", {255,255,255,255});
 
-    selected = 0;
-    prevSelected = 0;
+    // Set selected stage dựa trên stage hiện tại của user
+    if (user) {
+        char stageChar = user->getStage();
+        if (stageChar >= '1' && stageChar <= '3') {
+            selected = static_cast<int>(stageChar - '1'); // '1' -> 0, '2' -> 1, '3' -> 2
+        } else {
+            selected = 0; // mặc định stage 1 nếu stage không hợp lệ
+        }
+    } else {
+        selected = 0; // không có user thì mặc định stage 1
+    }
+    
+    prevSelected = selected;
     slideAnim = 0.0f;
     sliding = false;
 
@@ -132,9 +143,18 @@ SDL_FRect Stages::computeDstForIndex(int idx, float extraShift) const
 bool Stages::isIndexUnlocked(int idx) const
 {
     if (!user) return false;
-    // idx is 0-based (0->'1'), compare char digits directly
-    char u = user->getStage(); // e.g. '1','2','3'
-    return u >= static_cast<char>('0' + idx);
+    
+    char u = user->getStage(); // e.g. '0','1','2','3'
+    
+    // Stage 1 (idx 0) luôn unlock (dù chưa chơi hay đã chơi)
+    if (idx == 0) {
+        return true;
+    }
+    
+    // Stage 2 (idx 1) unlock nếu đã thắng stage 1 (stage >= '2')
+    // Stage 3 (idx 2) unlock nếu đã thắng stage 2 (stage >= '3')
+    char requiredStage = static_cast<char>('1' + idx); // idx 1 -> '2', idx 2 -> '3'
+    return u >= requiredStage;
 }
 
 void Stages::render()

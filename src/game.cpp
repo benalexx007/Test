@@ -188,7 +188,9 @@ void Game::update()
         } else {
             // Ngược lại: xử lý thắng bình thường, hiện VictoryPanel + nút Next
             gameState = GameState::Victory;
-            
+            if (currentStage >= '1' && currentStage <= '2') {
+                user.updateStage(currentStage + 1);
+            }
                 if (!victoryPanel) {
                     victoryPanel = new VictoryPanel(renderer);
                     if (victoryPanel->init(winW, winH, [this]() {
