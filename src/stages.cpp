@@ -15,7 +15,7 @@ bool Stages::init(SDL_Renderer* rend, User* user_, int w, int h, std::function<v
 
     // load three stage preview textures: assets/images/background/background1_1.png .. background3_1.png
     for (int i = 0; i < 3; ++i) {
-        std::string path = "assets/images/background/background" +  std::string(1, '1' + i) + "_1.png";
+        std::string path = "assets/images/background/background" +  std::to_string(i + 1) + ".png";
         tex[i] = IMG_LoadTexture(renderer, path.c_str());
         if (!tex[i]) {
             std::cerr << "Stages::init - failed load " << path << " | " << SDL_GetError() << "\n";

@@ -6,22 +6,18 @@
 class Background {
 private:
     SDL_Renderer* renderer = nullptr;
-    SDL_Texture* textures[3] = { nullptr };
-    int bgIndex = 0;
-    Uint32 bgLastChange = 0;
-    Uint32 bgDelayMs = 500; // ms between frames
+    SDL_Texture* texture = nullptr; // Chỉ 1 background duy nhất
 
 public:
     Background(SDL_Renderer* renderer = nullptr);
     ~Background();
 
-    // load textures for stage (background{stage}_1..3.png)
+    // load textures cho stage (background{stage}.png)
     bool load(char stage);
 
-    // render current background stretched to window size
+    // render background (tĩnh)
     void render(int winW, int winH);
 
-    // free textures
+    // free texture
     void cleanup();
-
 };

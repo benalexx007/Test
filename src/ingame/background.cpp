@@ -8,44 +8,32 @@ Background::~Background() { cleanup(); }
 bool Background::load(char stage)
 {
     if (!renderer) return false;
-    for (int i = 0; i < 3; ++i) {
-        char index = '1' + i;
-        std::string path = "assets/images/background/background" + std::string(1, stage) + "_" + index + ".png";
-        textures[i] = IMG_LoadTexture(renderer, path.c_str());
-        if (!textures[i]) {
-            std::cerr << "Failed to load background: " << path << " | " << SDL_GetError() << std::endl;
-        }
+
+    cleanup(); // Xoá texture cũ nếu có
+
+    // Đường dẫn: assets/images/background/background{stage}.png
+    std::string path = "assets/images/background/background" + std::string(1, stage) + ".png";
+    texture = IMG_LoadTexture(renderer, path.c_str());
+    if (!texture) {
+        std::cerr << "Failed to load background: " << path << " | " << SDL_GetError() << std::endl;
+        return false;
     }
-    bgIndex = 0;
-    bgLastChange = SDL_GetTicks();
     return true;
 }
 
 void Background::render(int winW, int winH)
 {
-    // no renderer or textures => nothing to draw
-    if (!renderer) return;
-
-    // advance animation non-blocking
-    Uint32 now = SDL_GetTicks();
-    if (now - bgLastChange >= bgDelayMs) {
-        bgIndex = (bgIndex + 1) % 3;
-        bgLastChange = now;
-    }
-
-    SDL_Texture* tex = textures[bgIndex];
-    if (!tex) return;
+    // no renderer or texture => nothing to draw
+    if (!renderer || !texture) return;
 
     SDL_FRect dst = { 0.0f, 0.0f, static_cast<float>(winW), static_cast<float>(winH) };
-    SDL_RenderTexture(renderer, tex, NULL, &dst);
+    SDL_RenderTexture(renderer, texture, NULL, &dst);
 }
 
 void Background::cleanup()
 {
-    for (int i = 0; i < 3; ++i) {
-        if (textures[i]) {
-            SDL_DestroyTexture(textures[i]);
-            textures[i] = nullptr;
-        }
+    if (texture) {
+        SDL_DestroyTexture(texture);
+        texture = nullptr;
     }
 }
