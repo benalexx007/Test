@@ -1,0 +1,878 @@
+#include "panel.h"
+#include <iostream>
+#include "../core/functions.h"
+#include "../game.h"
+#include "textbox.h"
+#include "../core/audio.h"
+#include "../screens/start.h"
+extern Audio* g_audioInstance;
+
+Panel::Panel(SDL_Renderer* renderer) : renderer(renderer) {}
+Panel::~Panel() { cleanup(); }
+
+bool Panel::create(SDL_Renderer* rend, int px, int py, int pw, int ph)
+{
+    cleanup();
+    renderer = rend;
+    if (!renderer) return false;
+    x = px; y = py; w = pw; h = ph;
+    return true;
+}
+
+void Panel::cleanup()
+{
+    // free any owned resources
+    children.clear();
+    if (bgTexture) {
+        SDL_DestroyTexture(bgTexture);
+        bgTexture = nullptr;
+    }
+}
+
+void Panel::setPosition(int px, int py) { x = px; y = py; }
+
+bool Panel::setBackgroundFromFile(const std::string& path)
+{
+    if (!renderer) return false;
+    SDL_Texture* t = IMG_LoadTexture(renderer, path.c_str());
+    if (!t) {
+        std::cerr << "Panel::setBackgroundFromFile failed to load " << path << " | " << SDL_GetError() << "\n";
+        return false;
+    }
+
+    float texW = 0.0f, texH = 0.0f;
+    if (!SDL_GetTextureSize(t, &texW, &texH)) {
+        std::cerr << "Panel::setBackgroundFromFile failed to get texture size " << path << " | " << SDL_GetError() << "\n";
+        SDL_DestroyTexture(t);
+        return false;
+    }
+    
+    if (bgTexture) SDL_DestroyTexture(bgTexture);
+    bgTexture = t;
+
+    // set panel size to the image's size only if panel size is not already set.
+    // This allows callers to create a panel at a specific size (e.g. 1750x900)
+    // and have the background stretched to that size rather than forcing the
+    // panel to the image's native dimensions.
+    if (w == 0 && h == 0) {
+        w = static_cast<int>(texW);
+        h = static_cast<int>(texH);
+    }
+
+    return true;
+}
+
+void Panel::clearBackground()
+{
+    if (bgTexture) {
+        SDL_DestroyTexture(bgTexture);
+        bgTexture = nullptr;
+    }
+}
+
+Button* Panel::addButton(int localX, int localY, int bw, int bh,
+                         const std::string& text, int fontSize,
+                         SDL_Color textColor, const std::string& fontPath,
+                         HAlign halign, VAlign valign)
+{
+    if (!renderer) return nullptr;
+    Child c;
+    c.type = Child::Type::Button;
+    c.localX = localX;
+    c.localY = localY;
+    c.w = bw; c.h = bh;
+    c.halign = halign; c.valign = valign;
+    c.button = std::make_unique<Button>(renderer);
+    // Button::create will attempt to load images for the given stage string.
+    // Passing bw/bh==0 lets the Button measure its size from the normal texture.
+    c.button->create(renderer, 0, 0, bw, bh, text, fontSize, textColor, fontPath);
+
+    // If button measured its own size, update child width/height for layout.
+    int measuredW = c.button->getWidth();
+    int measuredH = c.button->getHeight();
+    if (measuredW > 0) c.w = measuredW;
+    if (measuredH > 0) c.h = measuredH;
+
+    children.push_back(std::move(c));
+    return children.back().button.get();
+}
+
+Text* Panel::addText(const std::string& fontPath, int fontSize,
+                     const std::string& textStr, SDL_Color color,
+                     int localX, int localY, HAlign halign, VAlign valign)
+{
+    if (!renderer) return nullptr;
+    Child c;
+    c.type = Child::Type::Text;
+    c.localX = localX;
+    c.localY = localY;
+    c.halign = halign; c.valign = valign;
+    c.text = std::make_unique<Text>(renderer);
+    if (!c.text->create(renderer, fontPath, fontSize, textStr, color)) {
+        // If creating text fails, still keep placeholder but return null
+        children.push_back(std::move(c));
+        return children.back().text.get();
+    }
+    // store measured w/h for layout
+    c.w = c.text->getWidth();
+    c.h = c.text->getHeight();
+    children.push_back(std::move(c));
+    return children.back().text.get();
+}
+
+void Panel::addImage(SDL_Texture* tex, int localX, int localY, int iw, int ih, HAlign halign, VAlign valign)
+{
+    if (!tex) return;
+    Child c;
+    c.type = Child::Type::Image;
+    c.image = tex;
+    c.localX = localX; c.localY = localY; c.w = iw; c.h = ih;
+    c.halign = halign; c.valign = valign;
+    children.push_back(std::move(c));
+}
+
+Textbox* Panel::addTextbox(int localX, int localY, int w, int h,
+                           const std::string& bgPath,
+                           const std::string& placeholderText,
+                           int fontSize, SDL_Color textColor, const std::string& fontPath,
+                           HAlign halign, VAlign valign)
+{
+    if (!renderer) return nullptr;
+    Child c;
+    c.type = Child::Type::Textbox;
+    c.localX = localX;
+    c.localY = localY;
+    c.w = w; c.h = h;
+    c.halign = halign; c.valign = valign;
+    c.textbox = std::make_unique<Textbox>(renderer);
+    if (!c.textbox->create(renderer, 0, 0, w, h, bgPath, placeholderText, fontSize, textColor, fontPath)) {
+        std::cerr << "Panel::addTextbox - failed to create textbox\n";
+        return nullptr;
+    }
+    children.push_back(std::move(c));
+    return children.back().textbox.get();
+}
+
+SDL_FRect Panel::computeChildDst(const Child& c) const
+{
+    float absX = static_cast<float>(x);
+    float absY = static_cast<float>(y);
+    // compute anchor point from panel + alignment
+    float baseX = absX;
+    float baseY = absY;
+    switch (c.halign) {
+        case HAlign::Left:   baseX += static_cast<float>(c.localX); break;
+        case HAlign::Center: baseX += (w - c.w) * 0.5f + static_cast<float>(c.localX); break;
+        case HAlign::Right:  baseX += static_cast<float>(w - c.w - c.localX); break;
+    }
+    switch (c.valign) {
+        case VAlign::Top:    baseY += static_cast<float>(c.localY); break;
+        case VAlign::Middle: baseY += (h - c.h) * 0.5f + static_cast<float>(c.localY); break;
+        case VAlign::Bottom: baseY += static_cast<float>(h - c.h - c.localY); break;
+    }
+    SDL_FRect dst = { baseX, baseY, static_cast<float>(c.w), static_cast<float>(c.h) };
+    return dst;
+}
+
+void Panel::handleEvent(const SDL_Event& e)
+{
+    // Always forward keyboard/text events and mouse events to textboxes,
+    // because textboxes need to react to keyboard input even if the event
+    // isn't a mouse event.
+    // First, update textbox positions/sizes and forward the event.
+    for (auto &c : children) {
+        if (c.type == Child::Type::Textbox && c.textbox) {
+            SDL_FRect dst = computeChildDst(c);
+            c.textbox->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
+            c.textbox->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
+            c.textbox->handleEvent(e); // forward ALL events (mouse + keyboard + text)
+        }
+    }
+
+    // Now handle mouse-only behavior for clicking buttons
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP ||
+        e.type == SDL_EVENT_MOUSE_MOTION || e.type == SDL_EVENT_MOUSE_WHEEL)
+    {
+        int mx = 0, my = 0;
+        if (e.type == SDL_EVENT_MOUSE_MOTION) { mx = e.motion.x; my = e.motion.y; }
+        else { mx = e.button.x; my = e.button.y; }
+
+        auto inside = [&](int mx_, int my_)->bool {
+            return mx_ >= x && mx_ < x + w && my_ >= y && my_ < y + h;
+        };
+        if (!inside(mx, my)) return;
+
+        // forward mouse to the first button under the cursor (topmost)
+        for (auto &c : children) {
+            if (c.type != Child::Type::Button) continue;
+            SDL_FRect dst = computeChildDst(c);
+            bool overChild = (mx >= dst.x && mx < dst.x + dst.w && my >= dst.y && my < dst.y + dst.h);
+            if (overChild) {
+                c.button->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
+                c.button->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
+                c.button->handleEvent(e);
+                return;
+            }
+        }
+    }
+}
+
+void Panel::render()
+{
+    if (!renderer) return;
+
+    // draw background (stretched to panel size)
+    if (bgTexture) {
+        SDL_FRect dst = { static_cast<float>(x), static_cast<float>(y), static_cast<float>(w), static_cast<float>(h) };
+        SDL_RenderTexture(renderer, bgTexture, nullptr, &dst);
+    }
+
+    // render children
+    for (const auto &c : children) {
+        SDL_FRect dst = computeChildDst(c);
+        switch (c.type) {
+            case Child::Type::Button:
+                if (c.button) {
+                    c.button->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
+                    c.button->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
+                    c.button->render();
+                }
+                break;
+
+            case Child::Type::Text:
+                if (c.text) {
+                    c.text->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
+                    c.text->render();
+                }
+                break;
+
+            case Child::Type::Image:
+                if (c.image) {
+                    SDL_RenderTexture(renderer, c.image, nullptr, &dst);
+                }
+                break;
+            
+            case Child::Type::Textbox:
+                if (c.textbox) {
+                    c.textbox->setPosition(static_cast<int>(dst.x), static_cast<int>(dst.y));
+                    c.textbox->setSize(static_cast<int>(dst.w), static_cast<int>(dst.h));
+                    c.textbox->render();
+                }
+                break;
+        }
+    }
+}
+
+int Panel::getX() const { return x; }
+int Panel::getY() const { return y; }
+int Panel::getWidth() const { return w; }
+int Panel::getHeight() const { return h; }
+
+IngamePanel::IngamePanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool IngamePanel::initForStage(Game* owner,
+                               int winW, int mapPxW, int winH, int mapPxH)
+{
+    // load background
+    std::string panelPath = "assets/images/panel/ingamePanel.png";
+    if (!setBackgroundFromFile(panelPath)) return false;
+
+    // compute position like 
+    int panelX = (winW - mapPxW - getWidth() - ((winW - mapPxW) * 10 / 100))/2;
+    int panelY = (winH - getHeight()) / 2;
+    setPosition(panelX, panelY);
+
+    // add title image centered near top (3% down), size 300x200
+    SDL_Texture* titleTex = IMG_LoadTexture(renderer, "assets/images/title.png");
+    int yText = static_cast<int>(getHeight() * 0.15f);
+    addImage(titleTex, 0, yText, 300, 150, HAlign::Center, VAlign::Top);
+
+    // add buttons (centered, stacked with 16px padding)
+    SDL_Color btnCol = { 0xf9, 0xf2, 0x6a, 0xFF };
+    const int padding = 16;
+    const int widthBtn = 350;
+    const int heightBtn = 85;
+
+    int yUndo = yText + 150 + padding;
+    Button* undoBtn = addButton(0, yUndo, widthBtn, heightBtn, "UNDO", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (undoBtn) {
+        undoBtn->setLabelPositionPercent(0.5f, 0.70f);
+        if (owner) undoBtn->setCallback([owner]() { undo(owner); });
+    }
+
+    int yRedo = yUndo + (undoBtn ? undoBtn->getHeight() : 0) + padding;
+    Button* redoBtn = addButton(0, yRedo, widthBtn, heightBtn, "REDO", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (redoBtn) {
+        redoBtn->setLabelPositionPercent(0.5f, 0.70f);
+        if (owner) redoBtn->setCallback([owner]() { redo(owner); });
+    }
+
+    int yReset = yRedo + (redoBtn ? redoBtn->getHeight() : 0) + padding;
+    Button* resetBtn = addButton(0, yReset, widthBtn, heightBtn, "RESET", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (resetBtn) {
+        resetBtn->setLabelPositionPercent(0.5f, 0.70f);
+        if (owner) resetBtn->setCallback([owner]() { reset(owner); });
+    }
+
+    int ySettings = yReset + (resetBtn ? resetBtn->getHeight() : 0) + padding;
+    Button* settingsBtn = addButton(0, ySettings, widthBtn, heightBtn, "SETTINGS", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (settingsBtn) {
+        settingsBtn->setLabelPositionPercent(0.5f, 0.70f);
+        if (owner) settingsBtn->setCallback([owner]() { owner->toggleSettings(); });
+    }
+    return true;
+}
+
+AccountPanel::AccountPanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool AccountPanel::init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged)
+{
+    // Giữ lại vị trí + kích thước hiện tại của panel
+    int px = getX();
+    int py = getY();
+    int pw = getWidth();
+    int ph = getHeight();
+
+    // Nếu chưa có size (lần đầu gọi từ Start), dùng tham số truyền vào
+    if (pw == 0 || ph == 0) {
+        pw = winW;
+        ph = winH;
+    }
+
+    // Tạo lại panel tại đúng vị trí cũ, chỉ reset nội dung bên trong
+    if (!create(renderer, px, py, pw, ph)) {
+        std::cerr << "AccountPanel::init - failed to create panel\n";
+        return false;
+    }
+
+    userPtr = user;
+    onChangedCallback = std::move(onChanged);
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    if (!hasUserFile) {
+        mode = Mode::FirstRunCreate;
+        buildFirstRunCreate();
+    } else {
+        mode = Mode::MainMenu;
+        buildMainMenu();
+    }
+
+    return true;
+}
+
+// -------- AccountPanel helpers --------
+
+void AccountPanel::buildFirstRunCreate()
+{
+    // First time ever (no file yet) -> force create account
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    // Clear any existing UI and restore background
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildFirstRunCreate - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.30f);
+    addText("assets/font.ttf", titleFontSize, "CREATE AN ACCOUNT", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    int paddingAfterTitle = 30;
+    int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
+
+    int tbW = 1500;
+    int tbH = 85;
+    int tbSpacing = 24;
+
+    // Username textbox (centered)
+    usernameTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "USERNAME", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + tbSpacing;
+
+    // Password textbox (centered)
+    passwordTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "PASSWORD", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + 40; // a bit more space before confirm
+
+    // Confirm button centered below textboxes
+    Button* confirmBtn = addButton(0, cursorY, 350, 85,
+                                   "CONFIRM", 72,
+                                   SDL_Color{0xf9,0xf2,0x6a,0xFF},
+                                   "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (confirmBtn) {
+        confirmBtn->setLabelPositionPercent(0.5f, 0.70f);
+        confirmBtn->setCallback([this]() {
+            if (!userPtr || !usernameTb || !passwordTb) return;
+            std::string username = usernameTb->getText();
+            std::string password = passwordTb->getText();
+
+            // Trim spaces
+            auto trim = [](std::string& s) {
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), s.end());
+            };
+            trim(username);
+            trim(password);
+
+            if (username.empty() || password.empty()) {
+                std::cerr << "AccountPanel: username or password is empty\n";
+                return;
+            }
+            bool ok = userPtr->signin(username, password);
+            if (!ok) {
+                std::cerr << "AccountPanel: signin failed\n";
+            } else {
+                if (onChangedCallback) onChangedCallback();
+            }
+        });
+    }
+}
+
+void AccountPanel::buildMainMenu()
+{
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildMainMenu - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+    const SDL_Color btnCol   = { 0xf9, 0xf2, 0x6a, 0xFF };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.25f);
+    addText("assets/font.ttf", titleFontSize, "ACCOUNT", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Show current account info
+    std::string currentUser = (userPtr ? userPtr->getUsername() : "");
+    bool hasActive = userPtr && !currentUser.empty() && !userPtr->getSign();
+
+    std::string info = "CURRENT: ";
+    info += hasActive ? currentUser : std::string("NONE");
+    int infoFontSize = 48;
+    int infoY = titleLocalY + titleFontSize + 10;
+    addText("assets/font.ttf", infoFontSize, info, btnCol,
+            0, infoY, HAlign::Center, VAlign::Top);
+
+    // Buttons: SIGN IN (register), LOG IN, LOG OUT (if active)
+    const int BtnW = 350;
+    const int BtnH = 85;
+    const int Padding = 16;
+    const int FontSize = 72;
+
+    int numButtons = hasActive ? 3 : 2;
+    int totalH = numButtons * BtnH + (numButtons - 1) * Padding;
+    int startY = infoY + infoFontSize + 40;
+    startY = std::max(startY, (getHeight() - totalH) / 2);
+
+    int idx = 0;
+
+    // SIGN IN -> go to CreateAccount form (register new account)
+    {
+        int y = startY + idx * (BtnH + Padding);
+        Button* b = addButton(0, y, BtnW, BtnH, "SIGN IN", FontSize, btnCol,
+                              "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (b) {
+            b->setLabelPositionPercent(0.5f, 0.70f);
+            b->setCallback([this]() {
+                mode = Mode::CreateAccount;
+                buildCreateAccount();
+            });
+        }
+        ++idx;
+    }
+
+    // LOG IN -> go to Login form
+    {
+        int y = startY + idx * (BtnH + Padding);
+        Button* b = addButton(0, y, BtnW, BtnH, "LOG IN", FontSize, btnCol,
+                              "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (b) {
+            b->setLabelPositionPercent(0.5f, 0.70f);
+            b->setCallback([this]() {
+                mode = Mode::Login;
+                buildLogin();
+            });
+        }
+        ++idx;
+    }
+
+    // LOG OUT (only if currently logged in)
+    if (hasActive) {
+        int y = startY + idx * (BtnH + Padding);
+        Button* b = addButton(0, y, BtnW, BtnH, "LOG OUT", FontSize, btnCol,
+                              "assets/font.ttf", HAlign::Center, VAlign::Top);
+        if (b) {
+            b->setLabelPositionPercent(0.5f, 0.70f);
+            b->setCallback([this]() {
+                if (!userPtr) return;
+                userPtr->logout();
+                // Vừa logout thì reset UI về giao diện đăng ký/đăng nhập ngay
+                bool hasFile = userPtr->read();
+                if (!hasFile) {
+                    mode = Mode::FirstRunCreate;
+                    buildFirstRunCreate();
+                } else {
+                    mode = Mode::MainMenu;
+                    buildMainMenu();
+                }
+                // Không gọi onChangedCallback ở đây để panel vẫn ở lại
+            });
+        }
+    }
+    
+}
+
+void AccountPanel::buildCreateAccount()
+{
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildCreateAccount - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+    const SDL_Color btnCol   = { 0xf9, 0xf2, 0x6a, 0xFF };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.25f);
+    addText("assets/font.ttf", titleFontSize, "SIGN IN / REGISTER", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    int paddingAfterTitle = 30;
+    int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
+
+    int tbW = 1500;
+    int tbH = 85;
+    int tbSpacing = 24;
+
+    usernameTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "USERNAME", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + tbSpacing;
+
+    passwordTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "PASSWORD", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + 40;
+
+    Button* confirmBtn = addButton(0, cursorY, 350, 85, "CONFIRM", 72,
+                                   btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (confirmBtn) {
+        confirmBtn->setLabelPositionPercent(0.5f, 0.70f);
+        confirmBtn->setCallback([this]() {
+            if (!userPtr || !usernameTb || !passwordTb) return;
+            std::string username = usernameTb->getText();
+            std::string password = passwordTb->getText();
+
+            auto trim = [](std::string& s) {
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), s.end());
+            };
+            trim(username);
+            trim(password);
+
+            if (username.empty() || password.empty()) {
+                std::cerr << "AccountPanel: username or password is empty\n";
+                return;
+            }
+            bool ok = userPtr->signin(username, password);
+            if (!ok) {
+                std::cerr << "AccountPanel: signin failed\n";
+            } else {
+                if (onChangedCallback) onChangedCallback();
+            }
+        });
+    }
+    const int BtnH = 85;
+    // Back button to go to main menu without changing account
+    int backY = cursorY + BtnH + 20;
+    Button* backBtn = addButton(0, backY, 350, 85, "BACK", 72,
+                                btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (backBtn) {
+        backBtn->setLabelPositionPercent(0.5f, 0.70f);
+        backBtn->setCallback([this]() {
+            mode = Mode::MainMenu;
+            buildMainMenu();
+        });
+    }
+    
+}
+
+void AccountPanel::buildLogin()
+{
+    usernameTb = nullptr;
+    passwordTb = nullptr;
+
+    cleanup();
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) {
+        std::cerr << "AccountPanel::buildLogin - failed to load background\n";
+        return;
+    }
+
+    const SDL_Color titleCol = { 255, 0, 0, 255 };
+    const SDL_Color btnCol   = { 0xf9, 0xf2, 0x6a, 0xFF };
+
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.25f);
+    addText("assets/font.ttf", titleFontSize, "LOG IN", titleCol,
+            0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    int paddingAfterTitle = 30;
+    int cursorY = titleLocalY + titleFontSize + paddingAfterTitle;
+
+    int tbW = 1500;
+    int tbH = 85;
+    int tbSpacing = 24;
+
+    usernameTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "USERNAME", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + tbSpacing;
+
+    passwordTb = addTextbox(0, cursorY, tbW, tbH,
+                            "assets/images/textbox/inputTextbox.png",
+                            "PASSWORD", 72, SDL_Color{0,0,0,255},
+                            "assets/font.ttf", HAlign::Center, VAlign::Top);
+    cursorY += tbH + 40;
+
+    Button* loginBtn = addButton(0, cursorY, 350, 85, "LOGIN", 72,
+                                 btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (loginBtn) {
+        loginBtn->setLabelPositionPercent(0.5f, 0.70f);
+        loginBtn->setCallback([this]() {
+            if (!userPtr || !usernameTb || !passwordTb) return;
+            std::string username = usernameTb->getText();
+            std::string password = passwordTb->getText();
+
+            auto trim = [](std::string& s) {
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), s.end());
+            };
+            trim(username);
+            trim(password);
+
+            if (username.empty() || password.empty()) {
+                std::cerr << "AccountPanel: username or password is empty\n";
+                return;
+            }
+
+            bool ok = userPtr->login(username, password);
+            if (!ok) {
+                std::cerr << "AccountPanel: login failed\n";
+            } else {
+                if (onChangedCallback) onChangedCallback();
+            }
+        });
+    }
+    const int BtnH = 85;
+    // Back button to go to main menu without logging in
+    int backY = cursorY + BtnH + 20;
+    Button* backBtn = addButton(0, backY, 350, 85, "BACK", 72,
+                                btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (backBtn) {
+        backBtn->setLabelPositionPercent(0.5f, 0.70f);
+        backBtn->setCallback([this]() {
+            mode = Mode::MainMenu;
+            buildMainMenu();
+        });
+    }
+}
+
+SettingsPanel::SettingsPanel(SDL_Renderer* renderer) : AccountPanel(renderer) {}
+bool SettingsPanel::init(User* user, int winW, int winH, std::function<void()> onChanged, 
+                         bool isInGame, std::function<void()> onQuitGame, Game* gamePtr)
+{
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
+
+    // Tiêu đề SETTINGS
+    const SDL_Color titleCol = {255, 0, 0, 255};
+    int titleFontSize = 72;
+    int titleLocalY = static_cast<int>(getHeight() * 0.30f);
+    addText("assets/font.ttf", titleFontSize, "SETTINGS",
+            titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Màu + kích thước nút
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
+    const int BtnW = 350;
+    const int BtnH = 85;
+    const int Padding = 16;
+    const int FontSize = 72;
+
+    // Vị trí bắt đầu dưới chữ SETTINGS
+    int baseY = titleLocalY + titleFontSize + 30;
+
+    // Nút ACCOUNT: chỉ hiện ngoài game
+    int yAfterAccount = baseY;
+    if (!isInGame) {
+        Button* accountBtn = addButton(0, baseY, BtnW, BtnH, "ACCOUNT",
+                                       FontSize, btnCol, "assets/font.ttf",
+                                       HAlign::Center, VAlign::Top);
+        if (accountBtn) {
+            accountBtn->setLabelPositionPercent(0.5f, 0.70f);
+            accountBtn->setCallback([this, user, winW, winH, onChanged]() {
+                if (!user) return;
+                bool hasUserFile = user->read();
+                AccountPanel::init(user, hasUserFile, winW, winH, onChanged);
+                // Giữ nguyên vị trí panel hiện tại
+            });
+        }
+        yAfterAccount = baseY + BtnH + Padding;
+    }
+
+    // Nút MUSIC: luôn nằm ngay dưới SETTINGS (hoặc dưới ACCOUNT nếu có)
+    int yMusic = isInGame ? baseY : yAfterAccount;
+    Button* musicBtn = addButton(0, yMusic, BtnW, BtnH, "MUSIC",
+                                 FontSize, btnCol, "assets/font.ttf",
+                                 HAlign::Center, VAlign::Top);
+    if (musicBtn) {
+        musicBtn->setLabelPositionPercent(0.5f, 0.70f);
+        musicBtn->setCallback([]() {
+            if (g_audioInstance) {
+                bool currentState = g_audioInstance->isMusicEnabled();
+                g_audioInstance->setMusicEnabled(!currentState);
+                std::cout << "Music " << (!currentState ? "ON" : "OFF") << "\n";
+            }
+        });
+    }
+
+    // Dòng tiếp theo sau MUSIC
+    int currentY = yMusic + BtnH + Padding;
+
+    if (isInGame) {
+        // Trong game: RETURN 1 dòng riêng, QUIT 1 dòng riêng
+
+        // RETURN
+        Button* returnBtn = addButton(0, currentY, BtnW, BtnH, "RETURN",
+                                      FontSize, btnCol, "assets/font.ttf",
+                                      HAlign::Center, VAlign::Top);
+        if (returnBtn) {
+            returnBtn->setLabelPositionPercent(0.5f, 0.70f);
+            returnBtn->setCallback([onChanged]() {
+                // Đóng panel và tiếp tục chơi
+                if (onChanged) onChanged();
+            });
+        }
+
+        currentY += BtnH + Padding;
+
+        // QUIT (thoát game)
+        Button* quitBtn = addButton(0, currentY, BtnW, BtnH, "QUIT",
+                                    FontSize, btnCol, "assets/font.ttf",
+                                    HAlign::Center, VAlign::Top);
+        if (quitBtn) {
+            quitBtn->setLabelPositionPercent(0.5f, 0.70f);
+            if (onQuitGame) {
+                quitBtn->setCallback([onQuitGame]() {
+                    if (onQuitGame) onQuitGame();
+                });
+            }
+        }
+    } else {
+        // Ngoài game: chỉ có QUIT dưới MUSIC, để đóng panel SETTINGS
+
+        Button* quitBtn = addButton(0, currentY, BtnW, BtnH, "QUIT",
+                                    FontSize, btnCol, "assets/font.ttf",
+                                    HAlign::Center, VAlign::Top);
+        if (quitBtn) {
+            quitBtn->setLabelPositionPercent(0.5f, 0.70f);
+            quitBtn->setCallback([onChanged]() {
+                if (onChanged) onChanged();
+            });
+        }
+    }
+
+    return true;
+}
+VictoryPanel::VictoryPanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool VictoryPanel::init(int winW, int winH, std::function<void()> onNextLevel) {
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
+
+    const SDL_Color titleCol = {255, 215, 0, 255}; // Gold color
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
+    
+    // Title: VICTORY
+    int titleFontSize = 100;
+    int titleLocalY = static_cast<int>(getHeight() * 0.3f);
+    addText("assets/font.ttf", titleFontSize, "VICTORY", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Button: NEXT LEVEL
+    const int BtnW = 350;
+    const int BtnH = 85;
+    int btnY = titleLocalY + titleFontSize + 60;
+    Button* nextBtn = addButton(0, btnY, BtnW, BtnH, "NEXT", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (nextBtn) {
+        nextBtn->setLabelPositionPercent(0.5f, 0.70f);
+        nextBtn->setCallback([onNextLevel]() {
+            if (onNextLevel) onNextLevel();
+        });
+    }
+
+    // play victory sound once (respect current music enabled state)
+    if (g_audioInstance) {
+        if (!g_audioInstance->playOneShot("assets/audio/victory.wav")) {
+            std::cerr << "VictoryPanel: failed to play victory.wav\n";
+        }
+    }
+
+    return true;
+}
+
+LostPanel::LostPanel(SDL_Renderer* renderer) : Panel(renderer) {}
+
+bool LostPanel::init(int winW, int winH, std::function<void()> onPlayAgain) {
+    if (!create(renderer, 0, 0, winW, winH)) return false;
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
+
+    const SDL_Color titleCol = {255, 0, 0, 255}; // Red color
+    const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
+    
+    // Title: LOST
+    int titleFontSize = 100;
+    int titleLocalY = static_cast<int>(getHeight() * 0.3f);
+    addText("assets/font.ttf", titleFontSize, "LOST", titleCol, 0, titleLocalY, HAlign::Center, VAlign::Top);
+
+    // Button: PLAY AGAIN
+    const int BtnW = 350;
+    const int BtnH = 85;
+    int btnY = titleLocalY + titleFontSize + 60;
+    Button* playAgainBtn = addButton(0, btnY, BtnW, BtnH, "RETRY", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    if (playAgainBtn) {
+        playAgainBtn->setLabelPositionPercent(0.5f, 0.70f);
+        playAgainBtn->setCallback([onPlayAgain]() {
+            if (onPlayAgain) onPlayAgain();
+        });
+    }
+
+    // play lost sound once (respect current music enabled state)
+    if (g_audioInstance) {
+        if (!g_audioInstance->playOneShot("assets/audio/lost.wav")) {
+            std::cerr << "LostPanel: failed to play lost.wav\n";
+        }
+    }
+
+    return true;
+}

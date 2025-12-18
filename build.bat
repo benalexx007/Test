@@ -1,0 +1,2 @@
+    g++ -std=c++23 -O2 -Wall -Ilibs/include -Llibs/lib @(Get-ChildItem src -Recurse -Filter *.cpp | ForEach-Object { $_.FullName }) -lSDL3 -lSDL3_image -lSDL3_ttf -o build\mummymaze.exe
+    build\mummymaze.exe
