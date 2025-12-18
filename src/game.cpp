@@ -167,7 +167,7 @@ void Game::update()
             }
                 if (!victoryPanel) {
                     victoryPanel = new VictoryPanel(renderer);
-                    if (victoryPanel->init(winW, winH, [this]() {
+                    if (victoryPanel->init(1750, 900, [this]() {
                         // Next level callback - restart game với stage mới
                         char nextStage = currentStage + 1;
                         std::cerr << "Loading next level: " << nextStage << "\n";  // Debug
@@ -191,7 +191,7 @@ void Game::update()
             // Tạo lost panel
             if (!lostPanel) {
                 lostPanel = new LostPanel(renderer);
-                if (lostPanel->init(winW, winH, [this]() {
+                if (lostPanel->init(1750, 900, [this]() {
                     // Play again callback - restart current level
                     cleanupForRestart();
                     init(currentStage);

@@ -1,6 +1,8 @@
 #include "audio.h"
 #include <iostream>
 #include <cstring>
+#include <thread>
+#include <chrono>
 
 Audio::Audio() {}
 
@@ -72,6 +74,7 @@ void Audio::playBackgroundMusic(bool loop) {
     
     // Resume audio device (SDL_OpenAudioDeviceStream tạo device ở trạng thái paused)
     SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(audioStream));
+    SDL_SetAudioStreamGain(audioStream, 0.2f);
     isPlaying = true;
 }
 
@@ -83,7 +86,7 @@ void Audio::setMusicEnabled(bool enabled) {
     if (enabled) {
         // Bật nhạc: Resume và set gain = 1.0
         SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(audioStream));
-        SDL_SetAudioStreamGain(audioStream, 1.0f);
+        SDL_SetAudioStreamGain(audioStream, 0.2f);
         isPlaying = true;
     } else {
         // Tắt nhạc: Set gain = 0 (không pause để giữ vị trí)
@@ -175,4 +178,50 @@ void Audio::feedAudioData(int neededBytes) {
             audioPosition = 0;
         }
     }
+}
+
+bool Audio::playOneShot(const std::string& filepath) {
+    SDL_AudioSpec spec;
+    Uint8* buf = nullptr;
+    Uint32 len = 0;
+    if (!SDL_LoadWAV(filepath.c_str(), &spec, &buf, &len)) {
+        std::cerr << "Audio::playOneShot - Failed to load " << filepath
+                  << ": " << SDL_GetError() << "\n";
+        return false;
+    }
+
+    SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(
+        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+        &spec,
+        nullptr,
+        nullptr
+    );
+
+    if (!stream) {
+        std::cerr << "Audio::playOneShot - Failed to open audio stream: "
+                  << SDL_GetError() << "\n";
+        SDL_free(buf);
+        return false;
+    }
+
+    int result = SDL_PutAudioStreamData(stream, buf, static_cast<int>(len));
+    if (result < 0) {
+        std::cerr << "Audio::playOneShot - Failed to put audio data: " << SDL_GetError() << "\n";
+        SDL_DestroyAudioStream(stream);
+        SDL_free(buf);
+        return false;
+    }
+
+    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
+
+    // detached thread will wait until queued data is played and then clean up
+    std::thread([stream, buf]() {
+        while (SDL_GetAudioStreamQueued(stream) > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        SDL_DestroyAudioStream(stream);
+        SDL_free(buf);
+    }).detach();
+
+    return true;
 }

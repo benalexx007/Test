@@ -278,17 +278,14 @@ bool IngamePanel::initForStage(Game* owner,
     if (!setBackgroundFromFile(panelPath)) return false;
 
     // compute position like 
-    int panelX = winW - mapPxW - getWidth() - ((winW - mapPxW) * 10 / 100);
-    int panelY = (winH - mapPxH) / 2 + (mapPxH - getHeight());
+    int panelX = (winW - mapPxW - getWidth() - ((winW - mapPxW) * 10 / 100))/2;
+    int panelY = (winH - getHeight()) / 2;
     setPosition(panelX, panelY);
 
     // add title image centered near top (3% down), size 300x200
     SDL_Texture* titleTex = IMG_LoadTexture(renderer, "assets/images/title.png");
-    if (titleTex) {
-        int yText = static_cast<int>(getHeight() * 0.12f);
-        addImage(titleTex, 0, yText, 300, 150, HAlign::Center, VAlign::Top);
-        std::cerr << "IngamePanel::initForStage failed to load title image: " << SDL_GetError() << "\n";
-    }
+    int yText = static_cast<int>(getHeight() * 0.15f);
+    addImage(titleTex, 0, yText, 300, 150, HAlign::Center, VAlign::Top);
 
     // add buttons (centered, stacked with 16px padding)
     SDL_Color btnCol = { 0xf9, 0xf2, 0x6a, 0xFF };
@@ -296,7 +293,7 @@ bool IngamePanel::initForStage(Game* owner,
     const int widthBtn = 350;
     const int heightBtn = 85;
 
-    int yUndo = static_cast<int>(getHeight() * 0.35f);
+    int yUndo = yText + 150 + padding;
     Button* undoBtn = addButton(0, yUndo, widthBtn, heightBtn, "UNDO", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (undoBtn) {
         undoBtn->setLabelPositionPercent(0.5f, 0.70f);
@@ -812,7 +809,7 @@ VictoryPanel::VictoryPanel(SDL_Renderer* renderer) : Panel(renderer) {}
 
 bool VictoryPanel::init(int winW, int winH, std::function<void()> onNextLevel) {
     if (!create(renderer, 0, 0, winW, winH)) return false;
-    if (!setBackgroundFromFile("assets/images/panel/ingamePanel.png")) return false;
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
 
     const SDL_Color titleCol = {255, 215, 0, 255}; // Gold color
     const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
@@ -826,12 +823,19 @@ bool VictoryPanel::init(int winW, int winH, std::function<void()> onNextLevel) {
     const int BtnW = 350;
     const int BtnH = 85;
     int btnY = titleLocalY + titleFontSize + 60;
-    Button* nextBtn = addButton(0, btnY, BtnW, BtnH, "NEXT LEVEL", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    Button* nextBtn = addButton(0, btnY, BtnW, BtnH, "NEXT", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (nextBtn) {
         nextBtn->setLabelPositionPercent(0.5f, 0.70f);
         nextBtn->setCallback([onNextLevel]() {
             if (onNextLevel) onNextLevel();
         });
+    }
+
+    // play victory sound once (respect current music enabled state)
+    if (g_audioInstance) {
+        if (!g_audioInstance->playOneShot("assets/audio/victory.wav")) {
+            std::cerr << "VictoryPanel: failed to play victory.wav\n";
+        }
     }
 
     return true;
@@ -841,7 +845,7 @@ LostPanel::LostPanel(SDL_Renderer* renderer) : Panel(renderer) {}
 
 bool LostPanel::init(int winW, int winH, std::function<void()> onPlayAgain) {
     if (!create(renderer, 0, 0, winW, winH)) return false;
-    if (!setBackgroundFromFile("assets/images/panel/ingamePanel.png")) return false;
+    if (!setBackgroundFromFile("assets/images/panel/settingsPanel.png")) return false;
 
     const SDL_Color titleCol = {255, 0, 0, 255}; // Red color
     const SDL_Color btnCol = {0xf9, 0xf2, 0x6a, 0xFF};
@@ -855,12 +859,19 @@ bool LostPanel::init(int winW, int winH, std::function<void()> onPlayAgain) {
     const int BtnW = 350;
     const int BtnH = 85;
     int btnY = titleLocalY + titleFontSize + 60;
-    Button* playAgainBtn = addButton(0, btnY, BtnW, BtnH, "PLAY AGAIN", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
+    Button* playAgainBtn = addButton(0, btnY, BtnW, BtnH, "RETRY", 72, btnCol, "assets/font.ttf", HAlign::Center, VAlign::Top);
     if (playAgainBtn) {
         playAgainBtn->setLabelPositionPercent(0.5f, 0.70f);
         playAgainBtn->setCallback([onPlayAgain]() {
             if (onPlayAgain) onPlayAgain();
         });
+    }
+
+    // play lost sound once (respect current music enabled state)
+    if (g_audioInstance) {
+        if (!g_audioInstance->playOneShot("assets/audio/lost.wav")) {
+            std::cerr << "LostPanel: failed to play lost.wav\n";
+        }
     }
 
     return true;

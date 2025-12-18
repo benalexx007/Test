@@ -14,6 +14,9 @@ public:
     // Lưu ý: SDL3 chỉ hỗ trợ WAV trực tiếp, MP3 cần decoder hoặc convert sang WAV
     bool loadBackgroundMusic(const std::string& filepath);
     void playBackgroundMusic(bool loop = true);
+
+    // Play a one-shot WAV effect (non-looping). Returns true on success.
+    bool playOneShot(const std::string& filepath);
     
     // Bật/tắt nhạc nền (không stop, chỉ set volume)
     void setMusicEnabled(bool enabled);
