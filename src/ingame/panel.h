@@ -1,0 +1,168 @@
+#pragma once
+#include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
+#include <string>
+#include <algorithm>
+#include <vector>
+#include <memory>
+#include <functional>
+#include "button.h"
+#include "../ui/text.h"
+#include "../user.h"
+#include "textbox.h"
+
+class User;
+class Game;
+
+class Panel {
+public:
+    enum class HAlign { Left, Center, Right };
+    enum class VAlign { Top, Middle, Bottom };
+
+    Panel(SDL_Renderer* renderer = nullptr);
+    ~Panel();
+
+    // create / lifecycle
+    bool create(SDL_Renderer* renderer, int x, int y, int w, int h);
+    void cleanup();
+
+    // panel transform
+    void setPosition(int x, int y);
+
+    // background
+    bool setBackgroundFromFile(const std::string& path); // loads texture and owns it
+    void clearBackground();
+
+    // create & add children (Panel owns them)
+    Button* addButton(int localX, int localY, int w, int h,
+                      const std::string& text = "",
+                      int fontSize = 16,
+                      SDL_Color textColor = {255,255,255,255},
+                      const std::string& fontPath = "asset/font.ttf",
+                      HAlign halign = HAlign::Left,
+                      VAlign valign = VAlign::Top);
+
+    Text* addText(const std::string& fontPath, int fontSize,
+                  const std::string& text,
+                  SDL_Color color,
+                  int localX, int localY,
+                  HAlign halign = HAlign::Left,
+                  VAlign valign = VAlign::Top);
+
+    // add existing image (panel takes ownership=false), size w/h are local
+    void addImage(SDL_Texture* tex, int localX, int localY, int w, int h,
+                  HAlign halign = HAlign::Left,
+                  VAlign valign = VAlign::Top);
+
+    // add textbox
+    Textbox* addTextbox(int localX, int localY, int w, int h,
+                    const std::string& bgPath,
+                    const std::string& placeholderText,
+                    int fontSize = 72,
+                    SDL_Color textColor = {255,255,255,255},
+                    const std::string& fontPath = "assets/font.ttf",
+                    HAlign halign = HAlign::Left,
+                    VAlign valign = VAlign::Top);
+
+    // event forwarding (mouse coords are translated into panel-local for children)
+    void handleEvent(const SDL_Event& e);
+
+    // draw all children (positions are relative to panel)
+    void render();
+
+    // getters
+    int getX() const;
+    int getY() const;
+    int getWidth() const;
+    int getHeight() const;
+
+protected:
+    SDL_Renderer* renderer = nullptr;
+private:
+    struct Child {
+        enum class Type { Button, Text, Image, Textbox } type;
+        std::unique_ptr<Button> button;
+        std::unique_ptr<Text> text;
+        std::unique_ptr<Textbox> textbox;
+        SDL_Texture* image = nullptr;
+        int localX = 0;
+        int localY = 0;
+        int w = 0, h = 0;
+        HAlign halign = HAlign::Left;
+        VAlign valign = VAlign::Top;
+    };
+
+    SDL_Texture* bgTexture = nullptr;
+    int x = 0, y = 0, w = 0, h = 0;
+    std::vector<Child> children;
+
+    // helpers
+    SDL_FRect computeChildDst(const Child& c) const;
+};
+
+class Game;
+
+class IngamePanel : public Panel {
+public:
+    IngamePanel(SDL_Renderer* renderer = nullptr);
+    bool initForStage(Game* owner,
+                      int winW, int mapPxW, int winH, int mapPxH);
+};
+
+class AccountPanel : public Panel {
+public:
+    AccountPanel(SDL_Renderer* renderer = nullptr);
+    ~AccountPanel() = default;
+
+    // initialize panel UI. hasUserFile == true when users file exists.
+    // onChanged() called when account state changes (e.g. signin created file)
+    bool init(User* user, bool hasUserFile, int winW, int winH, std::function<void()> onChanged = nullptr);
+
+private:
+    enum class Mode {
+        FirstRunCreate,  // no file yet -> force user to create account
+        MainMenu,        // file exists -> show SIGN IN / LOG IN / LOG OUT menu
+        CreateAccount,   // fullscreen create/register form
+        Login            // fullscreen login form
+    };
+
+    Mode mode = Mode::MainMenu;
+    User* userPtr = nullptr;                     // non-owning pointer to User
+    std::function<void()> onChangedCallback;     // called when account state changes
+
+    // non-owning pointers to textbox children (owned by Panel via unique_ptr)
+    Textbox* usernameTb = nullptr;
+    Textbox* passwordTb = nullptr;
+
+    // internal builders for each UI mode
+    void buildFirstRunCreate();
+    void buildMainMenu();
+    void buildCreateAccount();
+    void buildLogin();
+};
+
+class SettingsPanel : public AccountPanel {
+    public:
+        SettingsPanel(SDL_Renderer* renderer = nullptr);
+        ~SettingsPanel() = default;
+    
+        // initialize settings panel UI
+        // isInGame: true if called from inside the Game, false if called from the Start screen
+        // onQuitGame: callback to exit the current game (only used when isInGame = true)
+        // gamePtr: pointer to Game instance (non-owning). Used when `isInGame` is true
+        //          to invoke game-related actions such as undo/redo or reset.
+        bool init(User* user, int winW, int winH, std::function<void()> onChanged = nullptr, 
+                  bool isInGame = false, std::function<void()> onQuitGame = nullptr,
+                  class Game* gamePtr = nullptr);
+};
+class VictoryPanel : public Panel {
+    public:
+        VictoryPanel(SDL_Renderer* renderer = nullptr);
+        bool init(int winW, int winH, std::function<void()> onNextLevel);
+    };
+    
+class LostPanel : public Panel {
+    public:
+        LostPanel(SDL_Renderer* renderer = nullptr);
+        bool init(int winW, int winH, std::function<void()> onPlayAgain);
+    };
