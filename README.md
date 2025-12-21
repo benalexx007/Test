@@ -23,8 +23,8 @@ Người chơi điều khiển **Tôn Ngộ Không** di chuyển trong mê cung 
   (các file DLL đã được cung cấp trong thư mục `libs/bin`)
 
 ## Hướng dẫn biên dịch và chạy
-
-Mở **PowerShell** tại thư mục gốc của dự án và chạy:
+Cách 1: Mở file **build.vbs** và đợi khoảng 30 giây cho game khởi động.
+Cách 2: Mở **PowerShell** tại thư mục gốc của dự án và chạy:
 
 ```powershell
 g++ -std=c++23 -O2 -Wall -Ilibs/include -Llibs/lib (Get-ChildItem src -Recurse -Filter *.cpp).FullName -lSDL3 -lSDL3_image -lSDL3_ttf -o build\mummymaze.exe; ./build\mummymaze.exe
